@@ -1,0 +1,68 @@
+{% extends "base.html" %}
+{% block title %}Activity · SentinelPay{% endblock %}
+{% block content %}
+<header class="page-heading">
+  <div>
+    <p class="eyebrow">Your account activity</p>
+    <h1 class="page-title">Transaction history</h1>
+    <p class="page-subtitle">Review your recent simulated payments and their current status.</p>
+  </div>
+  <a class="btn btn-primary" href="{% url 'payments:new' %}"><span aria-hidden="true">＋</span>&nbsp; Make a payment</a>
+</header>
+
+<section aria-labelledby="history-heading">
+  <div class="section-heading">
+    <div>
+      <h2 class="section-title" id="history-heading">All payments</h2>
+      <p class="section-caption">Newest activity appears first · {{ page_obj.paginator.count }} total</p>
+    </div>
+  </div>
+  <div class="panel table-panel">
+    <div class="table-responsive">
+      <table class="table align-middle">
+        <thead>
+          <tr>
+            <th scope="col">Merchant</th>
+            <th scope="col">Date</th>
+            <th scope="col">From account</th>
+            <th scope="col" class="text-end">Amount</th>
+            <th scope="col">Status</th>
+            <th scope="col"><span class="visually-hidden">Details</span></th>
+          </tr>
+        </thead>
+        <tbody>
+        {% for p in page_obj %}
+          <tr>
+            <td><div class="merchant-name">{{ p.merchant_code }}</div><div class="merchant-sub">Card payment</div></td>
+            <td>{{ p.created_at|date:"d M Y · H:i" }}</td>
+            <td>{{ p.source_account.account_ref }}</td>
+            <td class="text-end amount-cell">{{ p.amount }} {{ p.currency }}</td>
+            <td><span class="status-pill {% if p.status == 'SUCCEEDED' %}status-succeeded{% elif p.status == 'FAILED' or p.status == 'REJECTED' %}status-failed{% elif p.status == 'HELD_FOR_REVIEW' %}status-held{% elif p.status == 'UNKNOWN' %}status-unknown{% endif %}">{{ p.get_status_display }}</span></td>
+            <td class="text-end"><a class="payment-view" href="{% url 'payments:detail' public_ref=p.public_ref %}">View <span aria-hidden="true">→</span></a></td>
+          </tr>
+        {% empty %}
+          <tr><td class="empty-state" colspan="6">No payments yet. Your activity will appear here after you make a payment.</td></tr>
+        {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    {% if page_obj.paginator.num_pages > 1 %}
+      <nav class="pagination-wrap" aria-label="Transaction history pages">
+        <span>Page {{ page_obj.number }} of {{ page_obj.paginator.num_pages }}</span>
+        <div class="pagination-actions">
+          {% if page_obj.has_previous %}
+            <a class="btn-outline-soft" href="?page={{ page_obj.previous_page_number }}">Previous</a>
+          {% else %}
+            <span class="btn-outline-soft is-disabled" aria-disabled="true">Previous</span>
+          {% endif %}
+          {% if page_obj.has_next %}
+            <a class="btn-outline-soft" href="?page={{ page_obj.next_page_number }}">Next</a>
+          {% else %}
+            <span class="btn-outline-soft is-disabled" aria-disabled="true">Next</span>
+          {% endif %}
+        </div>
+      </nav>
+    {% endif %}
+  </div>
+</section>
+{% endblock %}

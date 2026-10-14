@@ -1,0 +1,38 @@
+{% extends "base.html" %}
+{% block title %}New payment · SentinelPay{% endblock %}
+{% block content %}
+<div class="form-shell">
+  <a class="back-link" href="{% url 'dashboard' %}"><span aria-hidden="true">←</span> Back to overview</a>
+  <header class="page-heading">
+    <div>
+      <p class="eyebrow">Simple and secure</p>
+      <h1 class="page-title">Make a payment</h1>
+      <p class="page-subtitle">Enter the details below to submit a simulated payment.</p>
+    </div>
+  </header>
+  <section class="panel form-panel">
+    {% if form.non_field_errors %}
+      <div class="alert alert-danger" role="alert">{{ form.non_field_errors|join:" " }}</div>
+    {% endif %}
+    <form method="post" novalidate>
+      {% csrf_token %}
+      {{ form.idempotency_key }}
+      {% for field in form.visible_fields %}
+        <div class="form-field">
+          <label for="{{ field.id_for_label }}">{{ field.label }}</label>
+          {{ field }}
+          {% for error in field.errors %}<div class="field-error">{{ error }}</div>{% endfor %}
+        </div>
+      {% endfor %}
+      <div class="form-note">
+        <span class="form-note-icon" aria-hidden="true">i</span>
+        <span>This is a simulated payment. A fraud-risk check runs before submission. No real funds will move.</span>
+      </div>
+      <div class="form-actions">
+        <button class="btn btn-primary" type="submit">Submit payment <span aria-hidden="true">→</span></button>
+        <a class="btn-outline-soft" href="{% url 'dashboard' %}">Cancel</a>
+      </div>
+    </form>
+  </section>
+</div>
+{% endblock %}

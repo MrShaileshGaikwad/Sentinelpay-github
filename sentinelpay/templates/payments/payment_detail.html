@@ -1,0 +1,55 @@
+{% extends "base.html" %}
+{% block title %}Payment receipt · SentinelPay{% endblock %}
+{% block content %}
+<a class="back-link" href="{% url 'dashboard' %}"><span aria-hidden="true">←</span> Back to overview</a>
+<header class="receipt-head">
+  <div>
+    <p class="eyebrow">Payment activity</p>
+    <h1 class="page-title">Payment receipt</h1>
+    <p class="receipt-reference">Reference · {{ payment.public_ref }}</p>
+  </div>
+  <span class="status-pill {% if payment.status == 'SUCCEEDED' %}status-succeeded{% elif payment.status == 'FAILED' or payment.status == 'REJECTED' %}status-failed{% elif payment.status == 'HELD_FOR_REVIEW' %}status-held{% elif payment.status == 'UNKNOWN' %}status-unknown{% endif %}">{{ payment.get_status_display }}</span>
+</header>
+
+<div class="row g-3">
+  <div class="col-12 col-lg-6">
+    <section class="panel detail-panel">
+      <h2 class="detail-heading">Payment details</h2>
+      <p class="amount-highlight">{{ payment.amount }} <span class="fs-6 fw-semibold">{{ payment.currency }}</span></p>
+      <dl class="detail-list">
+        <div class="detail-row"><dt>From account</dt><dd>{{ payment.source_account.account_ref }}</dd></div>
+        <div class="detail-row"><dt>Merchant</dt><dd>{{ payment.merchant_code }}</dd></div>
+        <div class="detail-row"><dt>Gateway code</dt><dd>{{ payment.gateway_code|default:"—" }}</dd></div>
+        <div class="detail-row"><dt>Date and time</dt><dd>{{ payment.created_at|date:"d M Y · H:i:s" }}</dd></div>
+      </dl>
+    </section>
+  </div>
+  <div class="col-12 col-lg-6">
+    <section class="panel detail-panel">
+      <h2 class="detail-heading">Risk assessment</h2>
+      <p class="risk-score">{{ payment.fraud_score|default:"—" }} <small>/ 100 risk score</small></p>
+      <p class="risk-decision">Decision <strong>{{ payment.fraud_decision|default:"Not available" }}</strong></p>
+      <p class="section-caption">Rule set {{ payment.fraud_ruleset_version|default:"—" }}</p>
+      {% if payment.fraud_reasons %}
+        <ul class="rule-list">
+        {% for r in payment.fraud_reasons %}
+          <li><strong>{{ r.rule_id }}</strong> (+{{ r.points }}): {{ r.explanation }}</li>
+        {% endfor %}
+        </ul>
+      {% else %}
+        <p class="section-caption mt-3">No fraud rules were triggered.</p>
+      {% endif %}
+    </section>
+  </div>
+  <div class="col-12">
+    <section class="panel detail-panel">
+      <h2 class="detail-heading">Ledger activity</h2>
+      {% for e in ledger_entries %}
+        <div class="ledger-row"><span>{{ e.created_at|date:"d M Y · H:i:s" }} · {{ e.account.account_ref }}</span><strong>{{ e.amount }} {{ payment.currency }}</strong></div>
+      {% empty %}
+        <p class="section-caption mb-0">No money moved for this payment. Ledger entries will appear here if funds are posted.</p>
+      {% endfor %}
+    </section>
+  </div>
+</div>
+{% endblock %}

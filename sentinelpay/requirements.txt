@@ -1,0 +1,6 @@
+# Versions below were used for the recorded test run (Python 3.12.3, Linux).
+Django==5.2.18
+pytest==9.1.1
+pytest-django==4.14.0
+# Optional, only when DB_ENGINE=mysql (not yet verified in this environment):
+# mysqlclient==2.2.7

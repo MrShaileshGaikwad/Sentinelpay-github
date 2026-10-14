@@ -1,0 +1,42 @@
+{% extends "base.html" %}
+{% block title %}Sign in · SentinelPay{% endblock %}
+{% block content %}
+<section class="login-wrap">
+  <div class="login-story">
+    <a class="brand story-brand" href="{% url 'login' %}">
+      <span class="brand-mark" aria-hidden="true">S</span>
+      <span>sentinel<span class="brand-light">pay</span></span>
+    </a>
+    <div class="story-copy">
+      <p class="story-kicker">Thoughtful banking, built for trust</p>
+      <h1 class="story-title">A clearer view of your money.</h1>
+      <p class="story-text">Manage your simulated accounts and payments from one calm, secure space.</p>
+    </div>
+    <p class="story-foot mb-0">A secure experience for your SentinelPay demo account.</p>
+  </div>
+  <div class="login-box">
+    <div class="login-form-wrap">
+      <span class="login-tag">Secure customer access</span>
+      <h2 class="login-title">Welcome back</h2>
+      <p class="login-intro">Sign in with your customer username and password to continue.</p>
+      {% if form.errors %}
+        <div class="alert alert-danger mb-4" role="alert">Username or password is incorrect. Please try again.</div>
+      {% endif %}
+      <form class="login-form" method="post" novalidate>
+        {% csrf_token %}
+        <input type="hidden" name="next" value="{{ next }}">
+        <div class="form-field">
+          <label for="{{ form.username.id_for_label }}">Username</label>
+          {{ form.username }}
+        </div>
+        <div class="form-field">
+          <label for="{{ form.password.id_for_label }}">Password</label>
+          {{ form.password }}
+        </div>
+        <button class="btn btn-primary login-submit" type="submit">Sign in to your account <span aria-hidden="true">→</span></button>
+      </form>
+      <p class="login-safe"><span aria-hidden="true">●</span> Private demo environment · Synthetic data only</p>
+    </div>
+  </div>
+</section>
+{% endblock %}

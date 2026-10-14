@@ -1,0 +1,48 @@
+{% load static %}
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#0F172A">
+  <title>{% block title %}SentinelPay{% endblock %}</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="{% static 'css/site.css' %}?v=3">
+</head>
+<body>
+<nav class="topbar">
+  <div class="container app-container topbar-inner">
+    <a class="brand" href="{% url 'dashboard' %}" aria-label="SentinelPay home">
+      <span class="brand-mark" aria-hidden="true">S</span>
+      <span>sentinel<span class="brand-light">pay</span></span>
+    </a>
+    {% if user.is_authenticated %}
+    <div class="nav-actions">
+      <a class="nav-link-main {% if request.resolver_match.url_name == 'dashboard' %}is-active{% endif %}" href="{% url 'dashboard' %}">Overview</a>
+      <a class="nav-link-main {% if request.resolver_match.url_name == 'new' %}is-active{% endif %}" href="{% url 'payments:new' %}">Payments</a>
+      <a class="nav-link-main {% if request.resolver_match.url_name == 'list' %}is-active{% endif %}" href="{% url 'payments:list' %}">Activity</a>
+      <div class="nav-user">
+        <span class="avatar">{{ user.get_username|slice:":1"|upper }}</span>
+        <span class="nav-username">{{ user.get_username }}</span>
+      </div>
+      <form method="post" action="{% url 'logout' %}" class="m-0">
+        {% csrf_token %}
+        <button class="btn-logout" type="submit">Sign out</button>
+      </form>
+    </div>
+    {% endif %}
+  </div>
+</nav>
+<main class="container app-container page-content">
+  {% block content %}{% endblock %}
+</main>
+<footer class="app-footer">
+  <div class="container app-container footer-inner">
+    <span><span class="footer-dot"></span> SentinelPay is a simulated academic banking platform.</span>
+    <span>Synthetic data only · No real funds move</span>
+  </div>
+</footer>
+</body>
+</html>

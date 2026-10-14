@@ -1,0 +1,68 @@
+{% extends "base.html" %}
+{% block title %}Overview · SentinelPay{% endblock %}
+{% block content %}
+<header class="page-heading">
+  <div>
+    <p class="eyebrow">Your personal banking space</p>
+    <h1 class="page-title">Good to see you, {{ user.first_name|default:user.get_username }}.</h1>
+    <p class="page-subtitle">Here’s what’s happening with your accounts today.</p>
+  </div>
+  <a class="btn btn-primary" href="{% url 'payments:new' %}"><span aria-hidden="true">＋</span>&nbsp; Make a payment</a>
+</header>
+
+<section class="account-grid" aria-labelledby="accounts-heading">
+  <div class="section-heading">
+    <div>
+      <h2 class="section-title" id="accounts-heading">Your accounts</h2>
+      <p class="section-caption">Balances from your demo accounts</p>
+    </div>
+  </div>
+  <div class="row g-3">
+    {% for account in accounts %}
+      <div class="col-12 col-md-6 col-lg-4">
+        <article class="account-card">
+          <div class="account-card-top">
+            <span class="account-label">Everyday account</span>
+            <span class="account-chip" aria-hidden="true"></span>
+          </div>
+          <p class="account-balance">{{ account.balance }}</p>
+          <span class="account-currency">{{ account.currency }} · Available balance</span>
+          <p class="account-ref mb-0">{{ account.account_ref }}</p>
+        </article>
+      </div>
+    {% empty %}
+      <div class="col-12"><div class="panel account-empty">No accounts are linked to your profile yet.</div></div>
+    {% endfor %}
+  </div>
+</section>
+
+<section aria-labelledby="payments-heading">
+  <div class="section-heading">
+    <div>
+      <h2 class="section-title" id="payments-heading">Recent payments</h2>
+      <p class="section-caption">A snapshot of your latest activity</p>
+    </div>
+    <a class="payment-view" href="{% url 'payments:list' %}">View all activity <span aria-hidden="true">→</span></a>
+  </div>
+  <div class="panel table-panel">
+    <div class="table-responsive">
+      <table class="table mb-0 align-middle">
+        <thead><tr><th scope="col">Merchant</th><th scope="col">Date</th><th scope="col" class="text-end">Amount</th><th scope="col">Status</th><th scope="col"><span class="visually-hidden">Details</span></th></tr></thead>
+        <tbody>
+        {% for p in recent_payments %}
+          <tr>
+            <td><div class="merchant-name">{{ p.merchant_code }}</div><div class="merchant-sub">Card payment</div></td>
+            <td>{{ p.created_at|date:"d M Y · H:i" }}</td>
+            <td class="text-end amount-cell">{{ p.amount }} {{ p.currency }}</td>
+            <td><span class="status-pill {% if p.status == 'SUCCEEDED' %}status-succeeded{% elif p.status == 'FAILED' or p.status == 'REJECTED' %}status-failed{% elif p.status == 'HELD_FOR_REVIEW' %}status-held{% elif p.status == 'UNKNOWN' %}status-unknown{% endif %}">{{ p.get_status_display }}</span></td>
+            <td class="text-end"><a class="payment-view" href="{% url 'payments:detail' public_ref=p.public_ref %}">View <span aria-hidden="true">→</span></a></td>
+          </tr>
+        {% empty %}
+          <tr><td class="empty-state" colspan="5">No payments yet. Your activity will appear here after you make a payment.</td></tr>
+        {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+</section>
+{% endblock %}
