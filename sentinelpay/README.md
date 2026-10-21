@@ -82,6 +82,12 @@ python -m pytest -v
 
 Tests use SQLite. MySQL configuration exists but has not been verified in this environment.
 
+## Optional VS Code Git auto-sync
+
+When the repository folder is trusted and opened in VS Code, the task in the repository-root `.vscode/tasks.json` starts `sentinelpay/scripts/auto-sync.ps1`. After saved or staged changes remain unchanged for five seconds, the watcher stages them, creates a commit, and pushes them to the current branch's configured upstream. This can publish unfinished work; stop the task with Ctrl+C or disable the folder-open task if you prefer manual review.
+
+GitHub authentication must already work through Git Credential Manager or VS Code's GitHub sign-in. The watcher does not store credentials. It refuses to auto-commit `.env` files (except `.env.example`), database files, private-key files, and names matching common secret/credential patterns. Existing `.gitignore` exclusions still apply. If the remote is ahead, it will not rebase or rewrite history; sync the branch manually before resuming. Git/commit failures are shown in the task terminal, and local work is preserved.
+
 ## Demonstration payment outcomes
 
 The merchant code selects the simulator response:
