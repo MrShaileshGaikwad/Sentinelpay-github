@@ -2,6 +2,7 @@ from datetime import datetime, timedelta
 from decimal import Decimal
 
 import pytest
+from django.contrib.auth.models import Group
 from django.db import IntegrityError, transaction
 from django.urls import reverse
 from django.utils import timezone
@@ -111,6 +112,32 @@ def test_high_risk_payment_is_held_without_debit(customer, account, old_benefici
     assert p.fraud_decision == "STEP_UP"
     assert p.status == Payment.Status.HELD_FOR_REVIEW
     assert balance(account) == Decimal("250000.00")
+    assert p.fraud_case.status == "NEW"
+    assert p.fraud_case.severity == "MEDIUM"
+
+
+@pytest.mark.django_db
+def test_critical_fraud_decision_is_rejected_without_debit(customer, account, old_beneficiary):
+    night = timezone.make_aware(datetime(2026, 10, 17, 2, 0))
+    for index in range(5):
+        pay(customer, account, old_beneficiary, key=f"history-{index}", now=night)
+    balance_after_history = balance(account)
+    fresh_beneficiary = Beneficiary.objects.create(
+        owner=customer, name="New Payee", destination_ref="T-NEW",
+        created_at=night - timedelta(hours=1),
+    )
+
+    payment = pay(
+        customer, account, fresh_beneficiary, amount="150000.00",
+        key="critical-risk", now=night,
+    )
+
+    assert payment.fraud_score >= 80
+    assert payment.fraud_decision == "DECLINE"
+    assert payment.status == Payment.Status.REJECTED
+    assert payment.fraud_case.severity == "CRITICAL"
+    assert not LedgerEntry.objects.filter(payment=payment).exists()
+    assert balance(account) == balance_after_history
 
 
 @pytest.mark.django_db
@@ -147,6 +174,16 @@ def test_cannot_use_another_customers_beneficiary(customer, other_customer, acco
 
 
 @pytest.mark.django_db
+def test_project_wide_beneficiary_can_be_used_by_any_customer(customer, other_customer, account):
+    shared = Beneficiary.objects.create(owner=None, name="Shared Utility", destination_ref="SHARED")
+    other_account = BankAccount.objects.create(
+        owner=other_customer, account_ref="T-OTHER", balance=Decimal("1000.00")
+    )
+    payment = pay(other_customer, other_account, shared)
+    assert payment.beneficiary == shared
+
+
+@pytest.mark.django_db
 def test_database_rejects_duplicate_ledger_posting(customer, account, old_beneficiary):
     p = pay(customer, account, old_beneficiary)
     with pytest.raises(IntegrityError), transaction.atomic():
@@ -172,6 +209,7 @@ def test_successful_payment_writes_audit_events_with_correlation_id(customer, ac
     events = AuditEvent.objects.filter(correlation_id=p.public_ref)
     actions = set(events.values_list("action", flat=True))
     assert {"FRAUD_EVALUATED", "PAYMENT_SUCCEEDED"} <= actions
+    assert {"REQUEST_VALIDATED", "AUTHORIZATION_VERIFIED", "BALANCE_CHECKED", "IDEMPOTENCY_CHECKED"} <= actions
 
 
 @pytest.mark.django_db
@@ -232,6 +270,36 @@ def test_form_only_offers_own_accounts(client, customer, other_customer, account
 
 
 @pytest.mark.django_db
+def test_form_offers_project_wide_and_own_beneficiaries(client, customer, other_customer, old_beneficiary):
+    shared = Beneficiary.objects.create(owner=None, name="Shared Utility", destination_ref="SHARED")
+    foreign = Beneficiary.objects.create(owner=other_customer, name="Private Utility", destination_ref="PRIVATE")
+    client.force_login(customer)
+    response = client.get(reverse("payments:new"))
+    field = response.context["form"].fields["beneficiary"]
+    choices = [str(value) for value, _ in field.choices if value]
+    labels = {str(value): label for value, label in field.choices}
+    assert str(old_beneficiary.pk) in choices
+    assert str(shared.pk) in choices
+    assert str(foreign.pk) not in choices
+    assert labels[str(shared.pk)] == "Shared Utility (Project-wide)"
+    assert b"Project-wide beneficiaries are shared across customers" in response.content
+
+
+@pytest.mark.django_db
+def test_authenticated_layout_uses_responsive_workspace_navigation(client, customer):
+    client.force_login(customer)
+
+    response = client.get(reverse("dashboard"))
+
+    assert response.status_code == 200
+    assert b'class="workspace-nav" aria-label="Main navigation"' in response.content
+    assert b'href="/payments/new/"' in response.content
+    assert b'href="/payments/fraud/"' not in response.content
+    assert b"Balances across your linked accounts" in response.content
+    assert b"Balances from your demo accounts" not in response.content
+
+
+@pytest.mark.django_db
 def test_post_payment_end_to_end(client, customer, account, old_beneficiary):
     client.force_login(customer)
     form_page = client.get(reverse("payments:new"))
@@ -244,9 +312,42 @@ def test_post_payment_end_to_end(client, customer, account, old_beneficiary):
         "idempotency_key": key,
     })
     assert response.status_code == 302
+    assert response["Location"] == reverse("payments:review")
+    assert Payment.objects.count() == 0
+    assert balance(account) == Decimal("250000.00")
+
+    review = client.get(reverse("payments:review"))
+    assert review.status_code == 200
+    assert b"Review your payment" in review.content
+    assert b"Transaction reference" in review.content
+    assert b"Assigned after submission" in review.content
+    assert "••••ST-1".encode() in review.content
+    assert b"Payment route" in review.content
+    assert b"Utility Co" in review.content
+    response = client.post(reverse("payments:review"), {"confirm": "yes"})
+    assert response.status_code == 302
     payment = Payment.objects.get()
     assert response["Location"] == reverse("payments:detail", kwargs={"public_ref": payment.public_ref})
     assert balance(account) == Decimal("249250.00")
+
+
+@pytest.mark.django_db
+def test_payment_review_can_be_cancelled_without_creating_a_payment(client, customer, account, old_beneficiary):
+    client.force_login(customer)
+    client.post(reverse("payments:new"), {
+        "source_account": account.pk,
+        "beneficiary": old_beneficiary.pk,
+        "amount": "750.00",
+        "merchant_code": "SIM-GROCERY",
+        "idempotency_key": "cancel-this-payment",
+    })
+
+    response = client.post(reverse("payments:review"), {"cancel": "yes"})
+
+    assert response.status_code == 302
+    assert Payment.objects.count() == 0
+    assert balance(account) == Decimal("250000.00")
+    assert "payment_review" not in client.session
 
 
 @pytest.mark.django_db
@@ -259,6 +360,8 @@ def test_double_submit_of_same_form_debits_once(client, customer, account, old_b
     }
     client.post(reverse("payments:new"), data)
     client.post(reverse("payments:new"), data)
+    client.post(reverse("payments:review"), {"confirm": "yes"})
+    client.post(reverse("payments:review"), {"confirm": "yes"})
     assert Payment.objects.count() == 1
     assert balance(account) == Decimal("249250.00")
 
@@ -270,4 +373,91 @@ def test_detail_page_shows_risk_and_ledger(client, customer, account, old_benefi
     response = client.get(reverse("payments:detail", kwargs={"public_ref": p.public_ref}))
     assert response.status_code == 200
     assert b"Risk assessment" in response.content
+    assert b'aria-valuenow="0"' in response.content
+    assert b"Processing timeline" in response.content
     assert b"-500.00" in response.content
+
+
+@pytest.mark.django_db
+def test_statement_csv_is_customer_scoped_and_uses_ledger_debits(client, customer, other_customer, account, old_beneficiary):
+    pay(customer, account, old_beneficiary)
+    other_account = BankAccount.objects.create(
+        owner=other_customer, account_ref="T-OTHER", balance=Decimal("1000.00")
+    )
+    pay(other_customer, other_account, merchant="SIM-ERROR")
+
+    client.force_login(customer)
+    response = client.get(reverse("payments:statement-csv"))
+
+    assert response.status_code == 200
+    assert response["Content-Type"].startswith("text/csv")
+    assert b"500.00" in response.content
+    assert b"-500.00" not in response.content
+    assert b"T-OTHER" not in response.content
+    assert b"SIM-GROCERY" in response.content
+
+
+@pytest.mark.django_db
+def test_dashboard_uses_customer_payment_data_and_masks_account_reference(
+    client, customer, other_customer, account, old_beneficiary
+):
+    pay(customer, account, old_beneficiary, now=timezone.now())
+    other_account = BankAccount.objects.create(
+        owner=other_customer, account_ref="T-OTHER", balance=Decimal("1000.00")
+    )
+    pay(other_customer, other_account, merchant="SIM-GROCERY", key="other-payment", now=timezone.now())
+    client.force_login(customer)
+
+    response = client.get(reverse("dashboard"))
+
+    assert response.status_code == 200
+    assert response.context["successful_count"] == 1
+    assert response.context["monthly_spend"] == Decimal("500.00")
+    assert len(response.context["monthly_activity"]) == 6
+    assert b"****0001" in response.content
+    assert b"T-OTHER" not in response.content
+
+
+@pytest.mark.django_db
+def test_fraud_console_requires_analyst_role_and_audits_case_updates(
+    client, customer, account, old_beneficiary
+):
+    payment = pay(customer, account, old_beneficiary, amount="150000.00")
+    case = payment.fraud_case
+    client.force_login(customer)
+    assert client.get(reverse("payments:fraud-center")).status_code == 403
+    assert client.get(reverse("payments:fraud-case", kwargs={"case_id": case.pk})).status_code == 403
+
+    analyst_group, _ = Group.objects.get_or_create(name="Fraud Analysts")
+    customer.groups.add(analyst_group)
+    response = client.get(reverse("payments:fraud-center"))
+    assert response.status_code == 200
+    assert b"Fraud intelligence" in response.content
+
+    response = client.post(
+        reverse("payments:fraud-case", kwargs={"case_id": case.pk}),
+        {"status": "INVESTIGATING", "analyst_note": "Reviewing the triggered amount rule."},
+    )
+    assert response.status_code == 302
+    case.refresh_from_db()
+    assert case.status == "INVESTIGATING"
+    assert case.assigned_reviewer == customer
+    event = AuditEvent.objects.get(
+        object_type="FraudCase", object_id=str(case.pk), action="FRAUD_CASE_UPDATED"
+    )
+    assert event.metadata["from_status"] == "NEW"
+    assert event.metadata["to_status"] == "INVESTIGATING"
+    assert event.metadata["note"] == "Reviewing the triggered amount rule."
+
+
+@pytest.mark.django_db
+def test_customer_transaction_filters_are_applied_server_side(client, customer, account, old_beneficiary):
+    pay(customer, account, old_beneficiary, amount="500.00", key="small")
+    pay(customer, account, old_beneficiary, amount="750.00", key="large")
+    client.force_login(customer)
+
+    response = client.get(reverse("payments:list"), {"amount_min": "700.00", "status": "SUCCEEDED"})
+
+    assert response.status_code == 200
+    assert response.context["page_obj"].paginator.count == 1
+    assert response.context["page_obj"][0].amount == Decimal("750.00")

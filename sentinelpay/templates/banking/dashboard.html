@@ -3,18 +3,41 @@
 {% block content %}
 <header class="page-heading">
   <div>
-    <p class="eyebrow">Your personal banking space</p>
+    <p class="eyebrow">Customer banking</p>
     <h1 class="page-title">Good to see you, {{ user.first_name|default:user.get_username }}.</h1>
-    <p class="page-subtitle">Here’s what’s happening with your accounts today.</p>
+    <p class="page-subtitle">A clear view of your simulated account activity.</p>
   </div>
-  <a class="btn btn-primary" href="{% url 'payments:new' %}"><span aria-hidden="true">＋</span>&nbsp; Make a payment</a>
+  <a class="btn btn-primary" href="{% url 'payments:new' %}">Make a payment <span aria-hidden="true">→</span></a>
 </header>
+
+<section class="metric-grid" aria-label="Account activity summary">
+  <article class="metric-card">
+    <span class="metric-label">Accounts</span>
+    <strong class="metric-value">{{ accounts|length }}</strong>
+    <span class="metric-foot">Linked to your profile</span>
+  </article>
+  <article class="metric-card">
+    <span class="metric-label">Successful payments</span>
+    <strong class="metric-value">{{ successful_count }}</strong>
+    <span class="metric-foot">All-time completed</span>
+  </article>
+  <article class="metric-card">
+    <span class="metric-label">This month</span>
+    <strong class="metric-value">{{ monthly_spend|floatformat:2 }}</strong>
+    <span class="metric-foot">Successful spend · {{ monthly_payment_count }} payments</span>
+  </article>
+  <article class="metric-card">
+    <span class="metric-label">Needs attention</span>
+    <strong class="metric-value">{{ open_payment_count }}</strong>
+    <span class="metric-foot">Pending or under review</span>
+  </article>
+</section>
 
 <section class="account-grid" aria-labelledby="accounts-heading">
   <div class="section-heading">
     <div>
       <h2 class="section-title" id="accounts-heading">Your accounts</h2>
-      <p class="section-caption">Balances from your demo accounts</p>
+      <p class="section-caption">Balances across your linked accounts</p>
     </div>
   </div>
   <div class="row g-3">
@@ -25,15 +48,42 @@
             <span class="account-label">Everyday account</span>
             <span class="account-chip" aria-hidden="true"></span>
           </div>
-          <p class="account-balance">{{ account.balance }}</p>
+          <p class="account-balance">{{ account.balance|floatformat:2 }}</p>
           <span class="account-currency">{{ account.currency }} · Available balance</span>
-          <p class="account-ref mb-0">{{ account.account_ref }}</p>
+          <p class="account-ref mb-0">Account · {{ account.masked_ref }}</p>
         </article>
       </div>
     {% empty %}
       <div class="col-12"><div class="panel account-empty">No accounts are linked to your profile yet.</div></div>
     {% endfor %}
   </div>
+</section>
+
+<section class="activity-chart-section" aria-labelledby="activity-chart-title">
+  <div class="section-heading">
+    <div>
+      <h2 class="section-title" id="activity-chart-title">Payment activity</h2>
+      <p class="section-caption">Successful simulated payments by month</p>
+    </div>
+  </div>
+  <div class="panel chart-panel">
+    <div class="activity-chart" role="img" aria-label="Successful payment totals for the last six months">
+      {% for month in monthly_activity %}
+      <div class="chart-column">
+        <span class="chart-amount">{{ month.spend|floatformat:0 }}</span>
+        <div class="chart-track"><span class="chart-bar" style="height: {% if month.height %}{{ month.height }}{% else %}2{% endif %}%"></span></div>
+        <span class="chart-month">{{ month.label }}</span>
+      </div>
+      {% endfor %}
+    </div>
+    <p class="chart-footnote">Values reflect successful payments recorded in your account. No incoming transfers are recorded in this demo.</p>
+  </div>
+</section>
+
+<section class="quick-actions" aria-label="Quick actions">
+  <a class="quick-action" href="{% url 'payments:new' %}"><span>↗</span><strong>Transfer money</strong><small>Start a simulated payment</small></a>
+  <a class="quick-action" href="{% url 'payments:list' %}"><span>≡</span><strong>View transactions</strong><small>Search your activity</small></a>
+  <a class="quick-action" href="{% url 'payments:statement-csv' %}"><span>↓</span><strong>Download statement</strong><small>Export your transaction history</small></a>
 </section>
 
 <section aria-labelledby="payments-heading">

@@ -6,10 +6,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="theme-color" content="#0F172A">
   <title>{% block title %}SentinelPay{% endblock %}</title>
-  <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="{% static 'css/site.css' %}?v=3">
+  <link rel="stylesheet" href="{% static 'css/site.css' %}?v=6">
 </head>
 <body>
 <nav class="topbar">
@@ -20,9 +17,6 @@
     </a>
     {% if user.is_authenticated %}
     <div class="nav-actions">
-      <a class="nav-link-main {% if request.resolver_match.url_name == 'dashboard' %}is-active{% endif %}" href="{% url 'dashboard' %}">Overview</a>
-      <a class="nav-link-main {% if request.resolver_match.url_name == 'new' %}is-active{% endif %}" href="{% url 'payments:new' %}">Payments</a>
-      <a class="nav-link-main {% if request.resolver_match.url_name == 'list' %}is-active{% endif %}" href="{% url 'payments:list' %}">Activity</a>
       <div class="nav-user">
         <span class="avatar">{{ user.get_username|slice:":1"|upper }}</span>
         <span class="nav-username">{{ user.get_username }}</span>
@@ -35,7 +29,38 @@
     {% endif %}
   </div>
 </nav>
+{% if user.is_authenticated %}
+<aside class="workspace-nav" aria-label="Main navigation">
+  <p class="workspace-nav-label">Workspace</p>
+  <nav class="workspace-nav-links">
+    <a class="workspace-link {% if request.resolver_match.url_name == 'dashboard' %}is-active{% endif %}" href="{% url 'dashboard' %}" {% if request.resolver_match.url_name == 'dashboard' %}aria-current="page"{% endif %}>
+      <span class="workspace-icon" aria-hidden="true">⌂</span><span>Overview</span>
+    </a>
+    <a class="workspace-link {% if request.resolver_match.url_name == 'new' or request.resolver_match.url_name == 'review' %}is-active{% endif %}" href="{% url 'payments:new' %}" {% if request.resolver_match.url_name == 'new' or request.resolver_match.url_name == 'review' %}aria-current="page"{% endif %}>
+      <span class="workspace-icon" aria-hidden="true">↗</span><span>Payments</span>
+    </a>
+    <a class="workspace-link {% if request.resolver_match.url_name == 'list' or request.resolver_match.url_name == 'detail' or request.resolver_match.url_name == 'statement-csv' %}is-active{% endif %}" href="{% url 'payments:list' %}" {% if request.resolver_match.url_name == 'list' or request.resolver_match.url_name == 'detail' or request.resolver_match.url_name == 'statement-csv' %}aria-current="page"{% endif %}>
+      <span class="workspace-icon" aria-hidden="true">≡</span><span>Activity</span>
+    </a>
+    {% if can_review_fraud %}
+    <a class="workspace-link {% if request.resolver_match.url_name == 'fraud-center' or request.resolver_match.url_name == 'fraud-case' %}is-active{% endif %}" href="{% url 'payments:fraud-center' %}" {% if request.resolver_match.url_name == 'fraud-center' or request.resolver_match.url_name == 'fraud-case' %}aria-current="page"{% endif %}>
+      <span class="workspace-icon" aria-hidden="true">◇</span><span>Fraud intelligence</span>
+    </a>
+    {% endif %}
+  </nav>
+  <div class="workspace-assurance">
+    <span class="assurance-mark" aria-hidden="true">✓</span>
+    <div><strong>Secure workspace</strong><small>Account access is scoped to your profile.</small></div>
+  </div>
+</aside>
+<div class="workspace-main">
+{% endif %}
 <main class="container app-container page-content">
+  {% if messages %}
+    <div class="message-stack" aria-live="polite">
+      {% for message in messages %}<div class="alert message-{{ message.tags }}" role="status">{{ message }}</div>{% endfor %}
+    </div>
+  {% endif %}
   {% block content %}{% endblock %}
 </main>
 <footer class="app-footer">
@@ -44,5 +69,8 @@
     <span>Synthetic data only · No real funds move</span>
   </div>
 </footer>
+{% if user.is_authenticated %}
+</div>
+{% endif %}
 </body>
 </html>

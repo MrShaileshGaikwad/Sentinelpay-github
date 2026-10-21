@@ -5,11 +5,15 @@
   <a class="back-link" href="{% url 'dashboard' %}"><span aria-hidden="true">←</span> Back to overview</a>
   <header class="page-heading">
     <div>
-      <p class="eyebrow">Simple and secure</p>
+      <p class="eyebrow">Step 1 of 2 · Payment details</p>
       <h1 class="page-title">Make a payment</h1>
       <p class="page-subtitle">Enter the details below to submit a simulated payment.</p>
     </div>
   </header>
+  <ol class="payment-steps" aria-label="Payment progress">
+    <li class="is-current" aria-current="step"><span>1</span><div><strong>Payment details</strong><small>Choose an account and recipient</small></div></li>
+    <li><span>2</span><div><strong>Review</strong><small>Confirm before screening</small></div></li>
+  </ol>
   <section class="panel form-panel">
     {% if form.non_field_errors %}
       <div class="alert alert-danger" role="alert">{{ form.non_field_errors|join:" " }}</div>
@@ -21,6 +25,7 @@
         <div class="form-field">
           <label for="{{ field.id_for_label }}">{{ field.label }}</label>
           {{ field }}
+          {% if field.help_text %}<div class="field-help">{{ field.help_text }}</div>{% endif %}
           {% for error in field.errors %}<div class="field-error">{{ error }}</div>{% endfor %}
         </div>
       {% endfor %}

@@ -1,0 +1,105 @@
+{% extends "base.html" %}
+{% block title %}Fraud intelligence · SentinelPay{% endblock %}
+{% block content %}
+<header class="page-heading">
+  <div>
+    <p class="eyebrow">Restricted operations workspace · persisted transaction records</p>
+    <h1 class="page-title">Fraud intelligence</h1>
+    <p class="page-subtitle">Transaction risk and review cases from recorded SentinelPay backend evaluations.</p>
+  </div>
+  <span class="status-pill status-held">Synthetic sandbox data</span>
+</header>
+
+<section class="metric-grid" aria-label="Transaction operations metrics">
+  <article class="metric-card"><span class="metric-label">Transactions</span><strong class="metric-value">{{ metrics.total }}</strong><span class="metric-foot">All recorded requests</span></article>
+  <article class="metric-card"><span class="metric-label">Succeeded</span><strong class="metric-value">{{ metrics.succeeded }}</strong><span class="metric-foot">Simulator-approved outcomes</span></article>
+  <article class="metric-card"><span class="metric-label">Held for review</span><strong class="metric-value">{{ metrics.held }}</strong><span class="metric-foot">No debit posted</span></article>
+  <article class="metric-card"><span class="metric-label">Rejected by policy</span><strong class="metric-value">{{ metrics.rejected }}</strong><span class="metric-foot">No debit posted</span></article>
+</section>
+
+<section class="panel risk-distribution-panel" aria-labelledby="risk-distribution-title">
+  <div class="section-heading">
+    <div><h2 class="section-title" id="risk-distribution-title">Recorded risk distribution</h2><p class="section-caption">Classification uses this app’s documented demonstration thresholds.</p></div>
+  </div>
+  <div class="risk-distribution">
+    {% for band in risk_distribution %}
+      <div class="risk-distribution-row">
+        <span class="risk-badge {{ band.class }}">{{ band.label }}</span>
+        <div class="risk-distribution-track"><span class="risk-distribution-bar {{ band.class }}" style="width: {{ band.width }}%"></span></div>
+        <strong>{{ band.count }}</strong>
+      </div>
+    {% endfor %}
+  </div>
+</section>
+
+<section class="monitor-section">
+  <div class="section-heading">
+    <div><h2 class="section-title">Fraud review queue</h2><p class="section-caption">Cases are created when fraud policy holds or rejects a payment.</p></div>
+  </div>
+  <div class="panel table-panel">
+    <div class="table-responsive">
+      <table class="table align-middle">
+        <thead><tr><th>Priority</th><th>Customer</th><th>Transaction</th><th>Risk</th><th>Status</th><th>Assigned reviewer</th><th></th></tr></thead>
+        <tbody>
+        {% for item in cases %}
+          <tr>
+            <td><span class="risk-badge risk-{{ item.severity|lower }}">{{ item.get_severity_display }}</span></td>
+            <td>{{ item.payment.customer.get_username }}</td>
+            <td><div class="merchant-name">{{ item.payment.merchant_code }}</div><div class="merchant-sub">{{ item.payment.public_ref|truncatechars:16 }}</div></td>
+            <td>{{ item.payment.fraud_score }}/100</td>
+            <td><span class="status-pill status-held">{{ item.get_status_display }}</span></td>
+            <td>{{ item.assigned_reviewer.get_username|default:"Unassigned" }}</td>
+            <td><a class="payment-view" href="{% url 'payments:fraud-case' case_id=item.pk %}">Review <span aria-hidden="true">→</span></a></td>
+          </tr>
+        {% empty %}
+          <tr><td class="empty-state" colspan="7">No open fraud review cases. New held or rejected payments will appear here.</td></tr>
+        {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+</section>
+
+<section class="monitor-section">
+  <div class="section-heading">
+    <div><h2 class="section-title">Transaction monitoring</h2><p class="section-caption">Latest 50 matching payments · filters are applied server-side.</p></div>
+  </div>
+  <form class="panel filter-panel" method="get">
+    <div class="filter-grid filter-grid-wide">
+      <div class="filter-field"><label for="{{ filter_form.search.id_for_label }}">{{ filter_form.search.label }}</label>{{ filter_form.search }}</div>
+      <div class="filter-field"><label for="{{ filter_form.status.id_for_label }}">Payment status</label>{{ filter_form.status }}</div>
+      <div class="filter-field"><label for="{{ filter_form.case_status.id_for_label }}">{{ filter_form.case_status.label }}</label>{{ filter_form.case_status }}</div>
+      <div class="filter-field"><label for="{{ filter_form.risk.id_for_label }}">Risk level</label>{{ filter_form.risk }}</div>
+      <div class="filter-field"><label for="{{ filter_form.date_from.id_for_label }}">From date</label>{{ filter_form.date_from }}</div>
+      <div class="filter-field"><label for="{{ filter_form.date_to.id_for_label }}">To date</label>{{ filter_form.date_to }}</div>
+      <div class="filter-field"><label for="{{ filter_form.amount_min.id_for_label }}">Minimum amount</label>{{ filter_form.amount_min }}</div>
+      <div class="filter-field"><label for="{{ filter_form.amount_max.id_for_label }}">Maximum amount</label>{{ filter_form.amount_max }}</div>
+    </div>
+    {% if filter_form.errors %}<p class="filter-errors" role="alert">Please correct the highlighted date or amount filters.</p>{% endif %}
+    <div class="filter-actions"><button class="btn btn-primary" type="submit">Apply filters</button><a class="btn-outline-soft" href="{% url 'payments:fraud-center' %}">Clear</a></div>
+  </form>
+  <div class="panel table-panel">
+    <div class="table-responsive">
+      <table class="table align-middle">
+        <thead><tr><th>Transaction</th><th>Timestamp</th><th>Amount</th><th>Customer</th><th>Risk score</th><th>Decision</th><th>Payment status</th><th></th></tr></thead>
+        <tbody>
+        {% for p in payments %}
+          <tr>
+            <td><div class="merchant-name">{{ p.public_ref|truncatechars:16 }}</div><div class="merchant-sub">{{ p.merchant_code }}</div></td>
+            <td>{{ p.created_at|date:"d M Y · H:i:s" }}</td>
+            <td class="amount-cell">{{ p.amount|floatformat:2 }} {{ p.currency }}</td>
+            <td>{{ p.customer.get_username }}</td>
+            <td><span class="risk-score-small">{{ p.fraud_score|default:"—" }}</span> / 100</td>
+            <td>{{ p.fraud_decision|default:"—" }}</td>
+            <td>{{ p.get_status_display }}</td>
+            <td><a class="payment-view" href="{% url 'payments:detail' public_ref=p.public_ref %}">Details</a></td>
+          </tr>
+        {% empty %}
+          <tr><td class="empty-state" colspan="8">No transactions match the selected filters.</td></tr>
+        {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+</section>
+{% endblock %}

@@ -61,3 +61,33 @@ class LedgerEntry(models.Model):
             models.UniqueConstraint(fields=["payment", "account"], name="one_ledger_entry_per_payment_account"),
             models.CheckConstraint(condition=~Q(amount=0), name="ledger_entry_not_zero"),
         ]
+
+
+class FraudCase(models.Model):
+    class Status(models.TextChoices):
+        NEW = "NEW", "New"
+        INVESTIGATING = "INVESTIGATING", "Investigating"
+        ESCALATED = "ESCALATED", "Escalated"
+        RESOLVED = "RESOLVED", "Resolved"
+        FALSE_POSITIVE = "FALSE_POSITIVE", "False positive"
+
+    class Severity(models.TextChoices):
+        MEDIUM = "MEDIUM", "Medium"
+        HIGH = "HIGH", "High"
+        CRITICAL = "CRITICAL", "Critical"
+
+    payment = models.OneToOneField(Payment, on_delete=models.PROTECT, related_name="fraud_case")
+    status = models.CharField(max_length=20, choices=Status.choices, default=Status.NEW)
+    severity = models.CharField(max_length=10, choices=Severity.choices)
+    assigned_reviewer = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True,
+        related_name="assigned_fraud_cases",
+    )
+    created_at = models.DateTimeField(default=timezone.now)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["-created_at"]
+
+    def __str__(self):
+        return f"Fraud case for {self.payment.public_ref} ({self.status})"

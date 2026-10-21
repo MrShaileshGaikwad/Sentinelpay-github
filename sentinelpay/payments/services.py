@@ -15,7 +15,7 @@ from datetime import timedelta
 from decimal import Decimal
 
 from django.db import IntegrityError, transaction
-from django.db.models import Avg, F
+from django.db.models import Avg, F, Q
 from django.utils import timezone
 
 from audit.services import record_event
@@ -23,7 +23,7 @@ from banking.models import BankAccount, Beneficiary
 from fraud_engine.engine import PaymentContext, evaluate
 
 from .gateway import SIMULATOR_MERCHANTS, GatewayOutcome, SimulatedGateway
-from .models import LedgerEntry, Payment
+from .models import FraudCase, LedgerEntry, Payment
 from .states import Status, transition
 
 HOME_COUNTRY = "IN"
@@ -96,13 +96,26 @@ def _post_debit(payment: Payment) -> bool:
     return True
 
 
+def _record_stage(payment, customer, action, label):
+    record_event(
+        actor=customer,
+        action=action,
+        object_type="Payment",
+        object_id=payment.pk,
+        correlation_id=payment.public_ref,
+        metadata={"stage": label},
+    )
+
+
 def _process(*, customer, account_id, beneficiary_id, amount, merchant_code, idempotency_key, fingerprint, now):
     account = BankAccount.objects.select_for_update().filter(pk=account_id, owner=customer).first()
     if account is None:
         raise PaymentError("Source account was not found.")
     beneficiary = None
     if beneficiary_id is not None:
-        beneficiary = Beneficiary.objects.filter(pk=beneficiary_id, owner=customer).first()
+        beneficiary = Beneficiary.objects.filter(pk=beneficiary_id).filter(
+            Q(owner=customer) | Q(owner__isnull=True)
+        ).first()
         if beneficiary is None:
             raise PaymentError("Beneficiary was not found.")
     if amount > account.balance:
@@ -128,6 +141,11 @@ def _process(*, customer, account_id, beneficiary_id, amount, merchant_code, ide
         ],
         created_at=now,
     )
+    _record_stage(payment, customer, "REQUEST_VALIDATED", "Request validated")
+    _record_stage(payment, customer, "AUTHORIZATION_VERIFIED", "Account and beneficiary ownership verified")
+    _record_stage(payment, customer, "BALANCE_CHECKED", "Available balance checked")
+    _record_stage(payment, customer, "IDEMPOTENCY_CHECKED", "Idempotency key accepted")
+    _record_stage(payment, customer, "PAYMENT_INITIATED", "Payment initiated")
     record_event(
         actor=customer, action="FRAUD_EVALUATED", object_type="Payment", object_id=payment.pk,
         correlation_id=payment.public_ref,
@@ -142,6 +160,7 @@ def _process(*, customer, account_id, beneficiary_id, amount, merchant_code, ide
         transition(payment, Status.HELD_FOR_REVIEW)
     else:
         transition(payment, Status.SUBMITTED)
+        _record_stage(payment, customer, "PAYMENT_SUBMITTED", "Submitted to payment simulator")
         response = SimulatedGateway().submit(merchant_code, amount, reference=str(payment.public_ref))
         payment.gateway_code = response.code
         payment.save(update_fields=["gateway_code", "updated_at"])
@@ -158,9 +177,26 @@ def _process(*, customer, account_id, beneficiary_id, amount, merchant_code, ide
         else:
             transition(payment, Status.FAILED)
 
+    if payment.status in (Status.HELD_FOR_REVIEW, Status.REJECTED):
+        severity = (
+            FraudCase.Severity.CRITICAL if evaluation.score >= 80
+            else FraudCase.Severity.HIGH if evaluation.score >= 50
+            else FraudCase.Severity.MEDIUM
+        )
+        case = FraudCase.objects.create(payment=payment, severity=severity)
+        record_event(
+            actor=None,
+            action="FRAUD_CASE_CREATED",
+            object_type="FraudCase",
+            object_id=case.pk,
+            correlation_id=payment.public_ref,
+            metadata={"severity": severity, "payment_ref": str(payment.public_ref)},
+        )
+
     record_event(
         actor=customer, action=f"PAYMENT_{payment.status}", object_type="Payment", object_id=payment.pk,
-        correlation_id=payment.public_ref, metadata={"gateway_code": payment.gateway_code},
+        correlation_id=payment.public_ref,
+        metadata={"gateway_code": payment.gateway_code, "stage": f"Payment {payment.get_status_display().lower()}"},
     )
     return payment
 

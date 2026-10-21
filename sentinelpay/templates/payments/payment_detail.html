@@ -8,7 +8,10 @@
     <h1 class="page-title">Payment receipt</h1>
     <p class="receipt-reference">Reference · {{ payment.public_ref }}</p>
   </div>
-  <span class="status-pill {% if payment.status == 'SUCCEEDED' %}status-succeeded{% elif payment.status == 'FAILED' or payment.status == 'REJECTED' %}status-failed{% elif payment.status == 'HELD_FOR_REVIEW' %}status-held{% elif payment.status == 'UNKNOWN' %}status-unknown{% endif %}">{{ payment.get_status_display }}</span>
+  <div class="receipt-actions">
+    <span class="status-pill {% if payment.status == 'SUCCEEDED' %}status-succeeded{% elif payment.status == 'FAILED' or payment.status == 'REJECTED' %}status-failed{% elif payment.status == 'HELD_FOR_REVIEW' %}status-held{% elif payment.status == 'UNKNOWN' %}status-unknown{% endif %}">{{ payment.get_status_display }}</span>
+    <button class="btn-outline-soft no-print" type="button" onclick="window.print()">Print receipt</button>
+  </div>
 </header>
 
 <div class="row g-3">
@@ -17,8 +20,9 @@
       <h2 class="detail-heading">Payment details</h2>
       <p class="amount-highlight">{{ payment.amount }} <span class="fs-6 fw-semibold">{{ payment.currency }}</span></p>
       <dl class="detail-list">
-        <div class="detail-row"><dt>From account</dt><dd>{{ payment.source_account.account_ref }}</dd></div>
-        <div class="detail-row"><dt>Merchant</dt><dd>{{ payment.merchant_code }}</dd></div>
+        <div class="detail-row"><dt>From account</dt><dd>{{ payment.source_account.masked_ref }}</dd></div>
+        <div class="detail-row"><dt>Recipient</dt><dd>{{ payment.beneficiary.name|default:payment.merchant_code }}</dd></div>
+        <div class="detail-row"><dt>Payment reference</dt><dd>{{ payment.public_ref }}</dd></div>
         <div class="detail-row"><dt>Gateway code</dt><dd>{{ payment.gateway_code|default:"—" }}</dd></div>
         <div class="detail-row"><dt>Date and time</dt><dd>{{ payment.created_at|date:"d M Y · H:i:s" }}</dd></div>
       </dl>
@@ -28,6 +32,9 @@
     <section class="panel detail-panel">
       <h2 class="detail-heading">Risk assessment</h2>
       <p class="risk-score">{{ payment.fraud_score|default:"—" }} <small>/ 100 risk score</small></p>
+      <div class="risk-meter {% if payment.fraud_score >= 80 %}is-critical{% elif payment.fraud_score >= 50 %}is-high{% elif payment.fraud_score >= 30 %}is-medium{% else %}is-low{% endif %}" role="progressbar" aria-label="Recorded fraud risk score" aria-valuemin="0" aria-valuemax="100" aria-valuenow="{{ payment.fraud_score|default:0 }}">
+        <span style="width: {{ payment.fraud_score|default:0 }}%"></span>
+      </div>
       <p class="risk-decision">Decision <strong>{{ payment.fraud_decision|default:"Not available" }}</strong></p>
       <p class="section-caption">Rule set {{ payment.fraud_ruleset_version|default:"—" }}</p>
       {% if payment.fraud_reasons %}
@@ -39,6 +46,32 @@
       {% else %}
         <p class="section-caption mt-3">No fraud rules were triggered.</p>
       {% endif %}
+      {% if fraud_case %}
+        <p class="case-notice">This payment was referred to the fraud review queue. No debit was posted.</p>
+      {% endif %}
+    </section>
+  </div>
+  <div class="col-12">
+    <section class="panel detail-panel timeline-panel">
+      <div class="section-heading">
+        <div>
+          <h2 class="detail-heading">Processing timeline</h2>
+          <p class="section-caption">Recorded backend events · sequence {{ timeline_duration_ms }} ms · replayed for review</p>
+        </div>
+      </div>
+      <ol class="event-timeline" aria-label="Recorded payment processing events">
+        {% for event in timeline %}
+          <li class="event-timeline-item">
+            <span class="event-marker" aria-hidden="true"></span>
+            <div class="event-content">
+              <strong>{{ event.metadata.stage|default:event.action }}</strong>
+              <time datetime="{{ event.created_at|date:'c' }}">{{ event.created_at|date:"d M Y · H:i:s" }}</time>
+            </div>
+          </li>
+        {% empty %}
+          <li class="empty-state">No processing events have been recorded.</li>
+        {% endfor %}
+      </ol>
     </section>
   </div>
   <div class="col-12">

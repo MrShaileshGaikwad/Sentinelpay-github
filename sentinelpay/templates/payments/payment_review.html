@@ -1,0 +1,57 @@
+{% extends "base.html" %}
+{% block title %}Review payment · SentinelPay{% endblock %}
+{% block content %}
+<div class="form-shell">
+  <a class="back-link" href="{% url 'payments:new' %}"><span aria-hidden="true">←</span> Edit payment</a>
+  <header class="page-heading">
+    <div>
+      <p class="eyebrow">Step 2 of 2 · Confirm details</p>
+      <h1 class="page-title">Review your payment</h1>
+      <p class="page-subtitle">Check the details before the backend validates and screens this simulated payment.</p>
+    </div>
+  </header>
+
+  <ol class="payment-steps" aria-label="Payment progress">
+    <li class="is-complete"><span aria-hidden="true">✓</span><div><strong>Payment details</strong><small>Details saved for review</small></div></li>
+    <li class="is-current" aria-current="step"><span>2</span><div><strong>Review</strong><small>Confirm before screening</small></div></li>
+  </ol>
+  <section class="panel review-panel">
+    {% if form.non_field_errors %}
+      <div class="alert alert-danger" role="alert">{{ form.non_field_errors|join:" " }}</div>
+    {% endif %}
+    {% if form.amount.errors %}
+      <div class="alert alert-danger" role="alert">{{ form.amount.errors|join:" " }}</div>
+    {% endif %}
+    <div class="review-total">
+      <span>Payment amount</span>
+      <strong>{{ amount|floatformat:2 }} {{ source_account.currency }}</strong>
+      <small>No fee or separate per-payment limit is configured for this simulator.</small>
+    </div>
+    <div class="transfer-route" aria-label="Payment route">
+      <div><span>From account</span><strong>{{ source_account.masked_ref }}</strong></div>
+      <span class="route-connector" aria-hidden="true"></span>
+      <div><span>To recipient</span><strong>{% if beneficiary %}{{ beneficiary.name }}{% else %}{{ merchant_code }}{% endif %}</strong></div>
+    </div>
+    <dl class="detail-list review-details">
+      <div class="detail-row"><dt>From account</dt><dd>{{ source_account.masked_ref }}</dd></div>
+      <div class="detail-row"><dt>Available balance</dt><dd>{{ source_account.balance|floatformat:2 }} {{ source_account.currency }}</dd></div>
+      <div class="detail-row"><dt>Recipient</dt><dd>{% if beneficiary %}{{ beneficiary.name }}{% else %}{{ merchant_code }}{% endif %}</dd></div>
+      {% if beneficiary %}<div class="detail-row"><dt>Destination</dt><dd>••••{{ beneficiary.destination_ref|slice:"-4:" }}</dd></div>{% endif %}
+      <div class="detail-row"><dt>Payment method</dt><dd>SentinelPay sandbox</dd></div>
+      <div class="detail-row"><dt>Payment route</dt><dd>{{ merchant_code }}</dd></div>
+      <div class="detail-row"><dt>Transaction reference</dt><dd>Assigned after submission</dd></div>
+      <div class="detail-row"><dt>Total debit if approved</dt><dd>{{ amount|floatformat:2 }} {{ source_account.currency }}</dd></div>
+    </dl>
+    <div class="form-note">
+      <span class="form-note-icon" aria-hidden="true">i</span>
+      <span>After confirmation, the server checks ownership, balance, duplicate requests and fraud rules. The simulator outcome determines the final status; held or declined payments do not debit the account.</span>
+    </div>
+    <form method="post" class="form-actions">
+      {% csrf_token %}
+      <button class="btn btn-primary" type="submit" name="confirm" value="yes">Confirm and submit <span aria-hidden="true">→</span></button>
+      <button class="btn-outline-soft" type="submit" name="cancel" value="yes">Cancel payment</button>
+      <a class="btn-outline-soft" href="{% url 'payments:new' %}">Edit details</a>
+    </form>
+  </section>
+</div>
+{% endblock %}

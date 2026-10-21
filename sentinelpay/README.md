@@ -1,37 +1,106 @@
-# SentinelPay (vertical slice)
+# SentinelPay
 
-Simulated digital banking with card-payment fraud checks. Synthetic data only. No real funds move.
+SentinelPay is a synthetic digital-banking and payment-fraud demonstration built with Django. It does not connect to a bank or move real funds.
 
-## What this slice contains
-- Login/logout, responsive dashboard, own-account balances, and paginated customer-scoped payment history.
-- Payment form: own accounts and beneficiaries only, idempotency key, server-side validation.
-- Payment lifecycle with an explicit state machine (`payments/states.py`).
-- Deterministic fraud engine with 8 rules (`fraud_engine/engine.py`). R-07 and R-08 are inactive in this slice because no device or IP data is captured.
-- Sandbox gateway simulator (`payments/gateway.py`). Merchant code selects the outcome: SIM-GROCERY success, SIM-DECLINE decline, SIM-TIMEOUT unknown, SIM-ERROR failure.
-- Append-only audit events and ledger entries with database constraints.
+## Current features
 
-## Not in this slice (see the scope notes in the design documents)
-Step-up authentication challenge, analyst case workflow, reconciliation, DRF API, notifications, MySQL verification, Docker, CI.
+- Customer sign-in, account overview, masked synthetic account references, and a six-month chart of successful payments based on stored payment records.
+- Two-step payment experience: enter details, review the amount and source account, then confirm before server-side validation and screening.
+- Explicit payment state machine, deterministic sandbox gateway outcomes, idempotency protection, and a ledger debit only after a successful simulator response.
+- Eight explainable, deterministic fraud rules with stored scores, decision, triggered reasons, and ruleset version. This is a rules engine, not a trained AI model or calibrated fraud probability.
+- Append-only payment processing events displayed as a transaction timeline.
+- Staff-only fraud monitoring and case review. Payments held or rejected by fraud policy create a review case; reviewers can assign themselves, update the case status, and record an audited note.
+- Customer-scoped transaction history filters and a CSV statement whose debit column is derived from ledger postings.
+- Responsive navy-and-teal workspace with account activity visualizations, payment progress and screening timelines, keyboard focus indicators, reduced-motion support, and a print-friendly payment receipt. Charts and risk indicators render persisted backend values.
 
-## Run it (Windows PowerShell, from the project folder)
+## Project documents
+
+- [Project flow](./docs/01-project-flow.md) — user journey from login through payment processing and logout.
+- [Project structure](./docs/02-project-structure.md) — source tree, app responsibilities, and code organization rationale.
+- [Software Requirements Specification](./docs/03-software-requirements-specification.md) — current functional/non-functional requirements and limitations.
+
+## Page inventory
+
+| Page | Route | Data and access |
+| --- | --- | --- |
+| Sign in | `/login/` | Django session authentication |
+| Account overview | `/` | Current customer's accounts and payment records |
+| Payment details and review | `/payments/new/`, `/payments/review/` | Server-validated payment draft, customer-owned account, eligible beneficiaries |
+| Transaction history and statement | `/payments/`, `/payments/statement.csv` | Current customer's persisted payments and ledger debits |
+| Payment receipt | `/payments/<reference>/` | Current customer's payment, fraud decision, audit timeline, and ledger records |
+| Fraud intelligence and case review | `/payments/fraud/`, `/payments/fraud/cases/<id>/` | Staff or Fraud Analysts group only; persisted transactions, cases, and audit history |
+| Django administration | `/admin/` | Django's built-in administration; access follows Django staff permissions |
+
+There is no customer registration, custom settings page, standalone audit-history route, real-time notification feed, or external payment/fraud API in this project. Payment receipts show the persisted payment event history, and fraud case detail shows audited case changes. The interface does not present simulator results as live banking activity. Decorative animation and chart motion use CSS only and are disabled for reduced-motion preferences.
+
+## Demonstration fraud policy
+
+Scores are the capped sum of these rule weights. They are explainable rule points, not probabilities:
+
+| Rule | Trigger | Points |
+| --- | --- | ---: |
+| R-01 | Amount is at least 100,000 currency units (demo accounts use INR) | 30 |
+| R-02 | Amount is at least 3 times the source account's successful 30-day average | 20 |
+| R-03 | At least 5 earlier payment attempts occurred in the previous hour | 15 |
+| R-04 | At least 3 failed or rejected attempts occurred in the previous hour | 20 |
+| R-05 | Beneficiary was added within the previous 24 hours | 15 |
+| R-06 | Payment initiated from 00:00 through 04:59 local time | 10 |
+| R-07 | New device | 15 (inactive; device data is not collected) |
+| R-08 | IP country differs from home country | 15 (inactive; IP-country data is not collected) |
+
+Scores 0–29 are approved, 30–49 require step-up, 50–79 are held for review, and 80–100 are declined. Step-up is not implemented, so step-up decisions are also held without a debit. These thresholds are fixed educational policy and must not be treated as production banking controls.
+
+## Run locally (Windows PowerShell)
+
+From the project directory:
+
 ```powershell
 py -3.12 -m venv .venv
 .\.venv\Scripts\Activate.ps1
 pip install -r requirements.txt
-copy .env.example .env        # then edit values; the app reads them from the environment
-$env:DEMO_PASSWORD = "choose-a-12+-char-password"
+$env:DJANGO_SECRET_KEY = "replace-with-a-local-development-secret"
+$env:DEMO_PASSWORD = "choose-a-12+-character-password"
 python manage.py migrate
 python manage.py seed_demo
 python manage.py runserver
 ```
-Log in as `demo.customer1` with the password you set. Pytest uses SQLite, so MySQL is not needed for tests.
 
-## Run tests
+Open http://127.0.0.1:8000/ and sign in as `demo.customer1` with the password set in `DEMO_PASSWORD`. Keep the terminal open while the server is running. `seed_demo` creates synthetic demo users, accounts, and beneficiaries; it does not reset existing data.
+
+Django reads configuration from process environment variables. A `.env` file is not automatically loaded. For a local-only demo, the settings have development defaults; use a unique secret key and `DJANGO_DEBUG=0` before any shared deployment. Configure `DJANGO_ALLOWED_HOSTS` and database environment variables explicitly when needed.
+
+## Fraud analyst access
+
+The fraud intelligence and case-review pages require either a Django staff account or membership in the `Fraud Analysts` group. A Django administrator can create that group and assign analyst users in `/admin/`. The server checks authorization on every protected view; hiding the navigation link is not the access control.
+
+## Tests and checks
+
 ```powershell
+python manage.py check
 python -m pytest -v
 ```
 
-## Limitations
-- Development settings: DEBUG defaults to on. Set `DJANGO_DEBUG=0` and a real secret key before any shared deployment.
-- Bootstrap is loaded from a CDN, so the page needs internet access to look right.
-- The MySQL path is configured but not yet verified in this environment.
+Tests use SQLite. MySQL configuration exists but has not been verified in this environment.
+
+## Demonstration payment outcomes
+
+The merchant code selects the simulator response:
+
+| Merchant | Outcome |
+| --- | --- |
+| `SIM-GROCERY` | Success |
+| `SIM-DECLINE` | Decline |
+| `SIM-TIMEOUT` | Unknown outcome; no automatic retry or debit |
+| `SIM-ERROR` | Failure |
+
+Fraud decisions are enforced before the simulator call. Held and rejected payments do not post a ledger debit. Successful payments create one negative ledger entry and reduce the source account balance once.
+
+## Scope and limitations
+
+- The account data and gateway are synthetic; there are no real transfers, inbound payments, fees, or payment-provider integrations.
+- The fraud rules and thresholds are fixed demonstration policy. Device/IP rules remain inactive because this app does not collect those signals.
+- Step-up authentication, payment reconciliation for unknown gateway outcomes, double-entry accounting, analyst case escalation notifications, PDF statements, real-time push updates, and production MySQL verification are not implemented.
+- Review cases are automatically created for held/rejected fraud decisions. The case workflow supports new, investigating, escalated, resolved, and false-positive states with audited updates.
+- Beneficiaries can be customer-owned or project-wide. Project-wide entries are available to every customer and can be created in Django admin by leaving the owner blank; `seed_demo` creates a shared sample utility beneficiary. Beneficiaries do not yet have a customer-facing management screen.
+- Statements include requested amounts and ledger-backed debits; they are not bank-issued statements.
+- External web fonts are not required. Bootstrap styling is implemented locally in the project stylesheet.

@@ -1,0 +1,88 @@
+{% extends "base.html" %}
+{% block title %}Fraud case · SentinelPay{% endblock %}
+{% block content %}
+<a class="back-link" href="{% url 'payments:fraud-center' %}"><span aria-hidden="true">←</span> Back to fraud intelligence</a>
+<header class="page-heading">
+  <div>
+    <p class="eyebrow">Case {{ fraud_case.pk }} · {{ fraud_case.created_at|date:"d M Y · H:i" }}</p>
+    <h1 class="page-title">Payment investigation</h1>
+    <p class="page-subtitle">Transaction {{ payment.public_ref }} · customer {{ payment.customer.get_username }}</p>
+  </div>
+  <span class="risk-badge risk-{{ fraud_case.severity|lower }}">{{ fraud_case.get_severity_display }} risk</span>
+</header>
+
+<div class="case-layout">
+  <div class="case-main">
+    <section class="panel detail-panel">
+      <h2 class="detail-heading">Payment and screening evidence</h2>
+      <p class="amount-highlight">{{ payment.amount|floatformat:2 }} <span class="fs-6 fw-semibold">{{ payment.currency }}</span></p>
+      <dl class="detail-list">
+        <div class="detail-row"><dt>Status</dt><dd>{{ payment.get_status_display }}</dd></div>
+        <div class="detail-row"><dt>Fraud decision</dt><dd>{{ payment.fraud_decision }} · {{ payment.fraud_score }}/100</dd></div>
+        <div class="detail-row"><dt>Ruleset</dt><dd>{{ payment.fraud_ruleset_version }}</dd></div>
+        <div class="detail-row"><dt>Merchant</dt><dd>{{ payment.merchant_code }}</dd></div>
+        <div class="detail-row"><dt>Source account</dt><dd>{{ payment.source_account.masked_ref }}</dd></div>
+        <div class="detail-row"><dt>Beneficiary</dt><dd>{{ payment.beneficiary.name|default:"Not specified" }}</dd></div>
+        <div class="detail-row"><dt>Gateway response</dt><dd>{{ payment.gateway_code|default:"Not submitted" }}</dd></div>
+      </dl>
+      <div class="risk-meter {% if payment.fraud_score >= 80 %}is-critical{% elif payment.fraud_score >= 50 %}is-high{% elif payment.fraud_score >= 30 %}is-medium{% else %}is-low{% endif %}" role="progressbar" aria-label="Recorded fraud risk score" aria-valuemin="0" aria-valuemax="100" aria-valuenow="{{ payment.fraud_score|default:0 }}">
+        <span style="width: {{ payment.fraud_score|default:0 }}%"></span>
+      </div>
+      <h3 class="detail-heading case-subheading">Triggered rules</h3>
+      {% if payment.fraud_reasons %}
+        <ul class="rule-list">
+        {% for reason in payment.fraud_reasons %}
+          <li><strong>{{ reason.rule_id }}</strong> (+{{ reason.points }}): {{ reason.explanation }}</li>
+        {% endfor %}
+        </ul>
+      {% else %}
+        <p class="section-caption">No individual rule explanation was stored for this case.</p>
+      {% endif %}
+    </section>
+
+    <section class="panel detail-panel timeline-panel">
+      <h2 class="detail-heading">Transaction processing events</h2>
+      <p class="section-caption">Recorded backend events · sequence {{ timeline_duration_ms }} ms · replayed for review</p>
+      <ol class="event-timeline" aria-label="Recorded payment processing events">
+        {% for event in payment_timeline %}
+          <li class="event-timeline-item"><span class="event-marker" aria-hidden="true"></span><div class="event-content"><strong>{{ event.metadata.stage|default:event.action }}</strong><time datetime="{{ event.created_at|date:'c' }}">{{ event.created_at|date:"d M Y · H:i:s" }}</time></div></li>
+        {% empty %}
+          <li class="empty-state">No processing events recorded.</li>
+        {% endfor %}
+      </ol>
+    </section>
+  </div>
+
+  <aside class="case-side">
+    <section class="panel detail-panel">
+      <h2 class="detail-heading">Review case</h2>
+      <p class="case-status-line">Status <strong>{{ fraud_case.get_status_display }}</strong></p>
+      <p class="case-status-line">Assigned reviewer <strong>{{ fraud_case.assigned_reviewer.get_username|default:"Unassigned" }}</strong></p>
+      {% if form.errors %}<div class="alert alert-danger" role="alert">Please correct the case update below.</div>{% endif %}
+      <form method="post" class="case-update-form">
+        {% csrf_token %}
+        <div class="filter-field"><label for="{{ form.status.id_for_label }}">New status</label>{{ form.status }}{% for error in form.status.errors %}<span class="field-error">{{ error }}</span>{% endfor %}</div>
+        <div class="filter-field"><label for="{{ form.analyst_note.id_for_label }}">Decision note</label>{{ form.analyst_note }}{% for error in form.analyst_note.errors %}<span class="field-error">{{ error }}</span>{% endfor %}</div>
+        <button class="btn btn-primary" type="submit">Save audited update</button>
+      </form>
+      <p class="section-caption case-help">Every change records the reviewer, previous and new status, note, and timestamp.</p>
+    </section>
+
+    <section class="panel detail-panel timeline-panel">
+      <h2 class="detail-heading">Decision history</h2>
+      <ol class="case-history">
+        {% for event in case_history %}
+          <li>
+            <strong>{{ event.get_action_display|default:event.action }}</strong>
+            <span>{{ event.actor.get_username|default:"System" }} · {{ event.created_at|date:"d M Y · H:i" }}</span>
+            {% if event.metadata.from_status %}<span>{{ event.metadata.from_status }} → {{ event.metadata.to_status }}</span>{% endif %}
+            {% if event.metadata.note %}<p>{{ event.metadata.note }}</p>{% endif %}
+          </li>
+        {% empty %}
+          <li class="section-caption">Case created automatically from the backend risk decision.</li>
+        {% endfor %}
+      </ol>
+    </section>
+  </aside>
+</div>
+{% endblock %}

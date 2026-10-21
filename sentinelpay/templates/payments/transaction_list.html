@@ -16,7 +16,21 @@
       <h2 class="section-title" id="history-heading">All payments</h2>
       <p class="section-caption">Newest activity appears first · {{ page_obj.paginator.count }} total</p>
     </div>
+    <a class="btn-outline-soft" href="{% url 'payments:statement-csv' %}{% if filter_query %}?{{ filter_query }}{% endif %}">Download CSV</a>
   </div>
+  <form class="panel filter-panel" method="get">
+    <div class="filter-grid">
+      <div class="filter-field"><label for="{{ filter_form.search.id_for_label }}">{{ filter_form.search.label }}</label>{{ filter_form.search }}</div>
+      <div class="filter-field"><label for="{{ filter_form.status.id_for_label }}">Payment status</label>{{ filter_form.status }}</div>
+      <div class="filter-field"><label for="{{ filter_form.risk.id_for_label }}">Risk level</label>{{ filter_form.risk }}</div>
+      <div class="filter-field"><label for="{{ filter_form.date_from.id_for_label }}">From date</label>{{ filter_form.date_from }}</div>
+      <div class="filter-field"><label for="{{ filter_form.date_to.id_for_label }}">To date</label>{{ filter_form.date_to }}</div>
+      <div class="filter-field"><label for="{{ filter_form.amount_min.id_for_label }}">Minimum amount</label>{{ filter_form.amount_min }}</div>
+      <div class="filter-field"><label for="{{ filter_form.amount_max.id_for_label }}">Maximum amount</label>{{ filter_form.amount_max }}</div>
+    </div>
+    {% if filter_form.errors %}<p class="filter-errors" role="alert">Please correct the highlighted date or amount filters.</p>{% endif %}
+    <div class="filter-actions"><button class="btn btn-primary" type="submit">Apply filters</button><a class="btn-outline-soft" href="{% url 'payments:list' %}">Clear</a></div>
+  </form>
   <div class="panel table-panel">
     <div class="table-responsive">
       <table class="table align-middle">
@@ -33,11 +47,11 @@
         <tbody>
         {% for p in page_obj %}
           <tr>
-            <td><div class="merchant-name">{{ p.merchant_code }}</div><div class="merchant-sub">Card payment</div></td>
+            <td><div class="merchant-name">{{ p.merchant_code }}</div><div class="merchant-sub">Ref · {{ p.public_ref|truncatechars:14 }}</div></td>
             <td>{{ p.created_at|date:"d M Y · H:i" }}</td>
-            <td>{{ p.source_account.account_ref }}</td>
-            <td class="text-end amount-cell">{{ p.amount }} {{ p.currency }}</td>
-            <td><span class="status-pill {% if p.status == 'SUCCEEDED' %}status-succeeded{% elif p.status == 'FAILED' or p.status == 'REJECTED' %}status-failed{% elif p.status == 'HELD_FOR_REVIEW' %}status-held{% elif p.status == 'UNKNOWN' %}status-unknown{% endif %}">{{ p.get_status_display }}</span></td>
+            <td>{{ p.source_account.masked_ref }}</td>
+            <td class="text-end amount-cell">{{ p.amount|floatformat:2 }} {{ p.currency }}</td>
+            <td><span class="status-pill {% if p.status == 'SUCCEEDED' %}status-succeeded{% elif p.status == 'FAILED' or p.status == 'REJECTED' %}status-failed{% elif p.status == 'HELD_FOR_REVIEW' %}status-held{% elif p.status == 'UNKNOWN' %}status-unknown{% endif %}">{{ p.get_status_display }}</span><div class="merchant-sub">Risk {{ p.fraud_score|default:"—" }}/100</div></td>
             <td class="text-end"><a class="payment-view" href="{% url 'payments:detail' public_ref=p.public_ref %}">View <span aria-hidden="true">→</span></a></td>
           </tr>
         {% empty %}
@@ -51,12 +65,12 @@
         <span>Page {{ page_obj.number }} of {{ page_obj.paginator.num_pages }}</span>
         <div class="pagination-actions">
           {% if page_obj.has_previous %}
-            <a class="btn-outline-soft" href="?page={{ page_obj.previous_page_number }}">Previous</a>
+            <a class="btn-outline-soft" href="?{{ filter_query }}&page={{ page_obj.previous_page_number }}">Previous</a>
           {% else %}
             <span class="btn-outline-soft is-disabled" aria-disabled="true">Previous</span>
           {% endif %}
           {% if page_obj.has_next %}
-            <a class="btn-outline-soft" href="?page={{ page_obj.next_page_number }}">Next</a>
+            <a class="btn-outline-soft" href="?{{ filter_query }}&page={{ page_obj.next_page_number }}">Next</a>
           {% else %}
             <span class="btn-outline-soft is-disabled" aria-disabled="true">Next</span>
           {% endif %}

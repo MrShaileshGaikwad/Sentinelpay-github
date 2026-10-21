@@ -21,6 +21,11 @@ class Command(BaseCommand):
         if len(password) < 12:
             raise CommandError("Set DEMO_PASSWORD to at least 12 characters in the environment.")
         User = get_user_model()
+        Beneficiary.objects.get_or_create(
+            owner=None,
+            destination_ref="SYN-DEST-000000",
+            defaults={"name": "Sample Utility Co"},
+        )
         for username, first, last, n in DEMO_CUSTOMERS:
             user, created = User.objects.get_or_create(
                 username=username, defaults={"first_name": first, "last_name": last}
@@ -31,10 +36,5 @@ class Command(BaseCommand):
             BankAccount.objects.get_or_create(
                 account_ref=f"SYN-{n:08d}",
                 defaults={"owner": user, "balance": Decimal("250000.00")},
-            )
-            Beneficiary.objects.get_or_create(
-                owner=user,
-                destination_ref=f"SYN-DEST-{n:06d}",
-                defaults={"name": "Sample Utility Co"},
             )
         self.stdout.write("Demo customers are ready.")
