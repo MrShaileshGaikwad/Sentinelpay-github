@@ -68,7 +68,7 @@
       <div class="col-12 col-md-6 col-lg-4">
         <article class="account-card">
           <div class="account-card-top">
-            <span class="account-label">{{ account.get_account_type_display }} account</span>
+            <span class="account-label">{{ account.get_account_type_display }}</span>
             <span class="account-chip" aria-hidden="true"></span>
           </div>
           <p class="account-balance">{{ account.balance|floatformat:2 }}</p>
@@ -76,6 +76,7 @@
           <p class="account-ref mb-0">Account · {{ account.masked_ref }}</p>
           <p class="account-ref mb-0">Ledger balance · {{ account.currency }} {{ account.ledger_balance|floatformat:2 }}</p>
           <p class="account-ref mb-0">Status · {{ account.get_account_status_display }}</p>
+          <p class="account-ref mb-0">Opened · {% if account.opened_at %}{{ account.opened_at|date:"d M Y" }}{% else %}Not on file{% endif %}</p>
         </article>
       </div>
     {% empty %}

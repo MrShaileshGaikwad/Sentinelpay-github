@@ -697,3 +697,4 @@ body:before {
 .form-field textarea { border-color: #d7e0e9; background-color: #fff; color: #1e293b; }
 .form-field textarea:focus { border-color: #0f8b73; background-color: #fff; box-shadow: 0 0 0 3px rgba(15,139,115,.12); }
 .transaction-reference { color: #526176; }
+.account-ref + .account-ref { margin-top: 7px; }
