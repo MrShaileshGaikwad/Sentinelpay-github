@@ -55,16 +55,18 @@ TEMPLATES = [
 
 WSGI_APPLICATION = "sentinelpay.wsgi.application"
 
-if os.environ.get("DB_ENGINE") == "mysql":
+if os.environ.get("DB_ENGINE", "sqlite").lower() == "mysql":
     DATABASES = {
         "default": {
             "ENGINE": "django.db.backends.mysql",
-            "NAME": os.environ["MYBANK"],
-            "USER": os.environ["root"],
-            "PASSWORD": os.environ["Professor@17"],
+            "NAME": os.environ.get("DB_NAME", "MYBANK"),
+            "USER": os.environ.get("DB_USER", "root"),
+            "PASSWORD": os.environ.get("DB_PASSWORD", "Professor@17"),
             "HOST": os.environ.get("DB_HOST", "127.0.0.1"),
             "PORT": os.environ.get("DB_PORT", "3306"),
-            "OPTIONS": {"charset": "utf8mb4"},
+            "OPTIONS": {
+                "charset": "utf8mb4",
+            },
         }
     }
 else:
