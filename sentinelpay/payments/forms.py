@@ -34,9 +34,21 @@ class PaymentForm(forms.Form):
         self.fields["source_account"].queryset = user.accounts.filter(
             account_status=BankAccount.AccountStatus.ACTIVE
         )
-        self.fields["beneficiary"].queryset = Beneficiary.objects.filter(
+        if not self.fields["source_account"].queryset.exists():
+            self.fields["source_account"].help_text = (
+                "No active accounts are linked to this user. Sign in as a demo customer "
+                "or ask an administrator to link an account."
+            )
+
+        beneficiaries = Beneficiary.objects.filter(
             (Q(owner=user) | Q(owner__isnull=True)), is_active=True
         ).order_by("name")
+        self.fields["beneficiary"].queryset = beneficiaries
+        if not beneficiaries.exists():
+            self.fields["beneficiary"].help_text = (
+                "No active beneficiaries are available. You can still make a merchant "
+                "payment without selecting one."
+            )
 
 
 class PaymentFilterForm(forms.Form):

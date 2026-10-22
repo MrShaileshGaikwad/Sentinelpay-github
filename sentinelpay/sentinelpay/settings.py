@@ -59,9 +59,9 @@ if os.environ.get("DB_ENGINE") == "mysql":
     DATABASES = {
         "default": {
             "ENGINE": "django.db.backends.mysql",
-            "NAME": os.environ["DB_NAME"],
-            "USER": os.environ["DB_USER"],
-            "PASSWORD": os.environ["DB_PASSWORD"],
+            "NAME": os.environ["MYBANK"],
+            "USER": os.environ["root"],
+            "PASSWORD": os.environ["Professor@17"],
             "HOST": os.environ.get("DB_HOST", "127.0.0.1"),
             "PORT": os.environ.get("DB_PORT", "3306"),
             "OPTIONS": {"charset": "utf8mb4"},

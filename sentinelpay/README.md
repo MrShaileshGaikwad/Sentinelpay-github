@@ -72,6 +72,8 @@ python manage.py runserver
 
 Open http://127.0.0.1:8000/ and sign in as `demo.customer1` with the password set in `DEMO_PASSWORD`. Keep the terminal open while the server is running. `seed_demo` creates synthetic demo users, customer profiles, accounts, and beneficiaries; it does not reset existing data.
 
+Payment source accounts are only shown to their owning user. Signing in with a Django administrator account does not automatically give that account customer bank accounts; use one of the seeded demo customer accounts or link an account in Django administration. The beneficiary selector appears below the source account and lists active personal or project-wide beneficiaries. If none exist, merchant payments can still be made without a beneficiary.
+
 Django reads configuration from process environment variables. A `.env` file is not automatically loaded. For a local-only demo, the settings have development defaults; use a unique secret key and `DJANGO_DEBUG=0` before any shared deployment. Configure `DJANGO_ALLOWED_HOSTS` and database environment variables explicitly when needed.
 
 ## Fraud analyst access

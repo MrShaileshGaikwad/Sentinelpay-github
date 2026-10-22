@@ -306,6 +306,23 @@ def test_form_only_offers_own_accounts(client, customer, other_customer, account
 
 
 @pytest.mark.django_db
+def test_payment_form_explains_when_user_has_no_accounts_or_beneficiaries(client, customer):
+    client.force_login(customer)
+
+    response = client.get(reverse("payments:new"))
+
+    assert response.status_code == 200
+    assert "No active accounts are linked to this user." in response.context["form"].fields[
+        "source_account"
+    ].help_text
+    assert "No active beneficiaries are available." in response.context["form"].fields[
+        "beneficiary"
+    ].help_text
+    assert b'name="beneficiary"' in response.content
+    assert b"merchant payment without selecting one" in response.content
+
+
+@pytest.mark.django_db
 def test_payment_form_excludes_inactive_accounts_and_beneficiaries(
     client, customer, account, old_beneficiary
 ):
