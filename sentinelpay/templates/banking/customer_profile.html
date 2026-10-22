@@ -1,0 +1,38 @@
+{% extends "base.html" %}
+{% block title %}Customer profile · SentinelPay{% endblock %}
+{% block content %}
+<a class="back-link" href="{% url 'dashboard' %}"><span aria-hidden="true">←</span> Back to overview</a>
+<header class="page-heading">
+  <div>
+    <p class="eyebrow">Customer banking</p>
+    <h1 class="page-title">Your customer profile</h1>
+    <p class="page-subtitle">Add or update the personal details you want stored in this simulated project.</p>
+  </div>
+</header>
+
+<section class="panel profile-form-panel" aria-labelledby="profile-form-heading">
+  <div class="profile-identity">
+    <span class="profile-number-label">Synthetic customer number</span>
+    <strong>{{ customer_profile.customer_number }}</strong>
+  </div>
+  <p class="profile-notice">KYC and customer risk status are system-managed. They remain “not provided” or “not assessed” unless a verified workflow updates them. Do not enter Aadhaar, PAN, passwords, or other government credentials here.</p>
+  <form method="post" novalidate>
+    {% csrf_token %}
+    {% if form.non_field_errors %}<div class="alert alert-danger" role="alert">{{ form.non_field_errors }}</div>{% endif %}
+    <div class="profile-form-grid">
+      {% for field in form %}
+        <div class="form-field {% if field.name == 'address' %}profile-address-field{% endif %}">
+          <label for="{{ field.id_for_label }}">{{ field.label }}</label>
+          {{ field }}
+          {% if field.help_text %}<small class="field-help">{{ field.help_text }}</small>{% endif %}
+          {% for error in field.errors %}<p class="field-error" role="alert">{{ error }}</p>{% endfor %}
+        </div>
+      {% endfor %}
+    </div>
+    <div class="profile-form-actions">
+      <button class="btn btn-primary" type="submit">Save profile</button>
+      <a class="btn-outline-soft" href="{% url 'dashboard' %}">Cancel</a>
+    </div>
+  </form>
+</section>
+{% endblock %}

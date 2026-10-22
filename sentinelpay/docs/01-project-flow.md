@@ -27,13 +27,17 @@ There is no public registration or password-reset workflow in the current routes
 
 The dashboard queries only records associated with the signed-in customer:
 
-- Their own bank accounts and balances.
+- Their own customer profile, bank accounts, and available/ledger balances.
 - Their payment counts, monthly successful spend, six-month payment activity, and recent transactions.
 - A count of payments requiring attention.
 
-The charts are rendered from these database results. They are not an independent source of transaction data. Account references are masked in the customer-facing view.
+Customer numbers are generated synthetic references. Name, email, phone, date of birth, and address are displayed from profile data only; missing values remain “Not provided.” KYC defaults to “Details not provided” and customer risk to “Not assessed.” The charts are rendered from database results and are not an independent source of transaction data. Account references are masked in the customer-facing view.
 
-### 4. Start a payment
+### 4. Edit customer details
+
+The customer opens `/profile/` from the workspace navigation. The form allows the signed-in customer to update their name, email, Indian mobile number, date of birth, and address. The server validates the mobile format and rejects a future date of birth. A successful save updates the linked customer profile and the corresponding Django user name/email fields. KYC and risk classifications are system-managed and cannot be set from the customer form. Aadhaar and PAN are not collected.
+
+### 5. Start a payment
 
 The customer opens `/payments/new/`. The form offers:
 
@@ -42,15 +46,15 @@ The customer opens `/payments/new/`. The form offers:
 - A positive decimal amount and one of the configured simulator routes.
 - A generated idempotency key retained as a hidden form field.
 
-Django validates the submitted values against server-side form fields and querysets. Another customer's private account or beneficiary is not an eligible choice. A valid form does not create or debit a payment: it stores a short-lived payment draft in the customer's session and redirects to review.
+Django validates the submitted values against server-side form fields and querysets. Only active accounts and active eligible beneficiaries are offered; the service checks these conditions again at confirmation. Another customer's private account or beneficiary is not an eligible choice. A valid form does not create or debit a payment: it stores a short-lived payment draft in the customer's session and redirects to review.
 
-### 5. Review the payment
+### 6. Review the payment
 
 At `/payments/review/`, the server reconstructs and validates the form from the session draft. If the saved details are missing or no longer valid, the draft is removed and the customer is asked to restart. The review shows the amount, source account, recipient, masked beneficiary destination when present, and the selected simulator route.
 
 The customer may edit the details, cancel, or confirm. Cancelling removes the draft without creating a payment. Confirming sends a CSRF-protected POST. The review page does not decide the fraud result or payment outcome.
 
-### 6. Server-side processing and fraud evaluation
+### 7. Server-side processing and fraud evaluation
 
 On confirmation, `payments.views.payment_review` calls `payments.services.create_payment`. The service performs the authoritative checks and processing:
 
@@ -65,7 +69,7 @@ On confirmation, `payments.views.payment_review` calls `payments.services.create
 
 The eight rule results and the decision thresholds are documented in the project README. They are educational rule points, not calibrated fraud probabilities. Device and IP-country rules are inactive because the application does not collect those signals.
 
-### 7. Apply the fraud decision and simulator outcome
+### 8. Apply the fraud decision and simulator outcome
 
 The backend enforces the result before submission:
 
@@ -80,21 +84,21 @@ The backend enforces the result before submission:
 | `SIM-TIMEOUT` | `UNKNOWN` | No debit; no automatic retry or reconciliation workflow. |
 | `SIM-ERROR` | `FAILED` | No debit. |
 
-All status changes use the state transition function in `payments/states.py`. The database constraints and transactional service protect idempotency and ledger posting.
+All status changes use the state transition function in `payments/states.py`. In the same database transaction, the service creates a `banking_transaction` record tied to the payment, account, and optional beneficiary. Its status and risk score copy the actual persisted payment result. A successful simulator result decrements both available and ledger balances and creates the existing ledger debit; non-success outcomes do not change either balance. A timeout remains unresolved with no processed timestamp or debit.
 
-### 8. View the result
+### 9. View the result
 
-After processing, the browser is redirected to the payment receipt identified by a unique public reference. The receipt is scoped to the signed-in customer and displays the persisted payment status, amount, account, recipient, fraud score and decision, triggered rules, recorded audit timeline, and any ledger entry.
+After processing, the browser is redirected to the payment receipt identified by a unique public reference. The receipt is scoped to the signed-in customer and displays the persisted payment status and transaction reference, amount, account, recipient, fraud score and decision, triggered rules, recorded audit timeline, and any ledger entry. The dashboard and transaction history show the same persisted transaction reference and result.
 
 The timeline is read from stored audit events. Its animation is a presentation effect; it does not imply that the transaction is still processing. The risk meter uses the stored score rather than inventing a new value.
 
-### 9. Review fraud cases (authorized users only)
+### 10. Review fraud cases (authorized users only)
 
 Staff, superusers, and members of the `Fraud Analysts` group can open `/payments/fraud/` and `/payments/fraud/cases/<id>/`. The monitoring page queries persisted payment and case records. Authorized reviewers may update a case through allowed status transitions and add a note. Each accepted change records the reviewer, old and new statuses, note, timestamp, and payment correlation ID in the append-only audit log.
 
 Customer users who do not meet the server-side permission check receive HTTP 403 even if they manually enter a fraud route.
 
-### 10. Sign out
+### 11. Sign out
 
 The shared navigation submits a CSRF-protected POST to `/logout/`. Django's built-in `LogoutView` ends the authenticated session and redirects according to Django's logout behavior. The user must sign in again to access protected pages.
 
@@ -104,10 +108,11 @@ The shared navigation submits a CSRF-protected POST to `/logout/`. Django's buil
 - Setting `DB_ENGINE=mysql` switches settings to the configured MySQL environment variables. MySQL is optional and has not been verified as part of the current setup.
 - Credentials and settings are read from process environment variables. `.env.example` contains placeholders; Django does not automatically load a `.env` file.
 - `python manage.py migrate` applies schema migrations. This document does not imply that a migration has already been applied to a particular local database.
+- The banking schema migration backfills customer profiles from names/emails already stored in Django users and transaction records from existing payments. It preserves the existing available balance and initializes ledger balance to that value as a cutover snapshot; it cannot reconstruct historical opening balances or ledger balances.
 
 ## Current flow limitations
 
 - Payments are simulated; no real payment network or provider is contacted.
-- There is no public registration, custom account-management page, live transaction feed, or external fraud API.
+- There is no public registration, customer control of KYC/risk classifications, live transaction feed, or external fraud API.
 - Unknown gateway outcomes remain unresolved until a future reconciliation feature exists.
 - Payment limits, fees, step-up authentication, and customer-managed beneficiary creation are not implemented.

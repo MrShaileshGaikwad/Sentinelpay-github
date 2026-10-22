@@ -23,6 +23,8 @@
         <div class="detail-row"><dt>From account</dt><dd>{{ payment.source_account.masked_ref }}</dd></div>
         <div class="detail-row"><dt>Recipient</dt><dd>{{ payment.beneficiary.name|default:payment.merchant_code }}</dd></div>
         <div class="detail-row"><dt>Payment reference</dt><dd>{{ payment.public_ref }}</dd></div>
+        <div class="detail-row"><dt>Transaction reference</dt><dd>{{ payment.banking_transaction.transaction_reference|default:"—" }}</dd></div>
+        <div class="detail-row"><dt>Transaction type</dt><dd>{{ payment.banking_transaction.get_transaction_type_display|default:"—" }}</dd></div>
         <div class="detail-row"><dt>Gateway code</dt><dd>{{ payment.gateway_code|default:"—" }}</dd></div>
         <div class="detail-row"><dt>Date and time</dt><dd>{{ payment.created_at|date:"d M Y · H:i:s" }}</dd></div>
       </dl>

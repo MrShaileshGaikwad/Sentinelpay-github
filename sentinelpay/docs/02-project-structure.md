@@ -16,6 +16,7 @@ sentinelpay/
 │   ├── management/commands/seed_demo.py
 │   ├── migrations/
 │   ├── context_processors.py
+│   ├── forms.py
 │   ├── models.py
 │   ├── permissions.py
 │   └── views.py
@@ -40,6 +41,7 @@ sentinelpay/
 ├── static/css/site.css
 ├── templates/
 │   ├── banking/
+│   │   ├── customer_profile.html
 │   ├── payments/
 │   ├── registration/
 │   └── base.html
@@ -71,14 +73,15 @@ The distribution ZIP intentionally excludes `db.sqlite3`, Git metadata, virtual 
 
 ### `banking/`
 
-Models the financial data used by the sample: `BankAccount` contains an owner, synthetic account reference, currency, and balance; `Beneficiary` can be customer-owned or project-wide. The account check constraint prevents negative balances at the database level.
+Models the financial data used by the sample. `Customer` links one-to-one with a Django user and stores user-provided profile fields plus explicit KYC/risk placeholders. `BankAccount` stores a synthetic account number, type, status, currency, available balance, and ledger balance. `Beneficiary` can be customer-owned or project-wide, and `Transaction` records each payment's account, optional recipient, simulator status, risk score, and timestamps.
 
+- `forms.py`: customer profile form validates date of birth and normalizes Indian mobile numbers. KYC and risk values are intentionally excluded from customer-editable fields.
 - `models.py`: shared banking entities used by payment validation and the dashboard.
-- `views.py`: customer overview. It filters accounts and payments to the authenticated customer and computes data for dashboard cards and charts.
+- `views.py`: customer overview and profile editing. Customer accounts/payments are scoped to the authenticated user; the profile view updates only that user's profile and corresponding Django user name/email.
 - `permissions.py`: single permission rule for fraud reviewers (staff, superuser, or membership in `Fraud Analysts`). Keeping this logic centralized makes nav visibility and view authorization consistent.
 - `context_processors.py`: exposes the reviewer permission to templates for conditional navigation. This is for display only; protected views check permission on the server too.
-- `management/commands/seed_demo.py`: creates synthetic demo users/accounts and a shared sample beneficiary using an environment-supplied password. It does not reset existing records.
-- `migrations/`: database schema history. Review and apply migrations deliberately; do not delete or replace migrations to repair a database.
+- `management/commands/seed_demo.py`: creates synthetic demo users, customer profiles, savings accounts, and a shared sample beneficiary using an environment-supplied password. It does not reset existing records.
+- `migrations/`: database schema history. The profile/transaction migration backfills profile names/emails from existing Django users and one transaction per existing payment; account ledger balance begins at the existing balance as a cutover snapshot, not a reconstruction of history. Review and apply migrations deliberately; do not delete or replace migrations to repair a database.
 
 ### `payments/`
 
@@ -87,7 +90,7 @@ Owns the payment workflow and its records. This app is separated from `banking/`
 - `models.py`: `Payment` stores customer, source account, optional beneficiary, amount, status, idempotency fingerprint, fraud evidence, simulator code, and timestamps. `LedgerEntry` records a posted debit, with uniqueness constraints to prevent duplicate posting. `FraudCase` tracks review work.
 - `forms.py`: validates customer input and querysets. The payment form only exposes the current customer's accounts, and only their own or project-wide beneficiaries. Filter forms validate transaction search and monitoring filters.
 - `views.py`: translates HTTP requests into page responses. It manages the payment draft in the session, handles review/confirmation, scopes receipts and statements, and gates fraud operations.
-- `services.py`: payment orchestration called by the view. It verifies ownership, enforces idempotency, evaluates fraud, saves audit stages, calls the simulator, makes the ledger debit on success, and creates cases for held/rejected payments.
+- `services.py`: payment orchestration called by the view. It verifies account/beneficiary ownership and activity, enforces idempotency, evaluates fraud, saves audit stages, calls the simulator, creates a linked banking transaction from the persisted outcome, makes the ledger debit on success, and creates cases for held/rejected payments.
 - `states.py`: the allowed status transitions. A single function validates and saves each transition to prevent arbitrary status changes.
 - `gateway.py`: deterministic simulator adapter. Merchant codes choose success, decline, timeout, or error responses; no external payment network is contacted.
 - `urls.py`: payment route names and URL patterns, kept out of the project-wide URL file for clearer app boundaries.
@@ -119,7 +122,8 @@ Contains Django configuration rather than product domain logic. `settings.py` se
 
 - `templates/base.html`: shared document shell, branding, accessible navigation, messages, and footer.
 - `templates/registration/login.html`: sign-in form presentation; authentication itself is Django's built-in view.
-- `templates/banking/dashboard.html`: account, spend, activity, and recent-payment presentation using context from the banking view.
+- `templates/banking/dashboard.html`: customer details, account balances, spend, activity, and recent-transaction presentation using context from the banking view.
+- `templates/banking/customer_profile.html`: customer-editable name and contact/profile fields; it does not expose KYC/risk status as editable inputs.
 - `templates/payments/`: payment form, confirmation/review, transaction list, receipt, fraud queue, and case detail.
 - `static/css/site.css`: shared responsive styles, light banking surfaces, visual indicators, and CSS animations. Reduced-motion preferences disable decorative motion.
 

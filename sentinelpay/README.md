@@ -5,8 +5,10 @@ SentinelPay is a synthetic digital-banking and payment-fraud demonstration built
 ## Current features
 
 - Customer sign-in, account overview, masked synthetic account references, and a six-month chart of successful payments based on stored payment records.
+- Indian-banking-style customer profiles with customer-editable contact details, synthetic customer numbers, explicit unknown KYC/risk states, and account type/status plus separate available and ledger balances.
 - Two-step payment experience: enter details, review the amount and source account, then confirm before server-side validation and screening.
-- Explicit payment state machine, deterministic sandbox gateway outcomes, idempotency protection, and a ledger debit only after a successful simulator response.
+- A persistent transaction record for each payment, linked to its source account and optional beneficiary, with the recorded status, risk score, reference, and processing time.
+- Explicit payment state machine, deterministic sandbox gateway outcomes, idempotency protection, and synchronized account ledger balances only after a successful simulator response.
 - Eight explainable, deterministic fraud rules with stored scores, decision, triggered reasons, and ruleset version. This is a rules engine, not a trained AI model or calibrated fraud probability.
 - Append-only payment processing events displayed as a transaction timeline.
 - Staff-only fraud monitoring and case review. Payments held or rejected by fraud policy create a review case; reviewers can assign themselves, update the case status, and record an audited note.
@@ -24,14 +26,17 @@ SentinelPay is a synthetic digital-banking and payment-fraud demonstration built
 | Page | Route | Data and access |
 | --- | --- | --- |
 | Sign in | `/login/` | Django session authentication |
-| Account overview | `/` | Current customer's accounts and payment records |
+| Account overview | `/` | Current customer's profile, accounts, balances, and payment records |
+| Customer profile | `/profile/` | Authenticated customer can edit their name, email, Indian mobile, date of birth, and address |
 | Payment details and review | `/payments/new/`, `/payments/review/` | Server-validated payment draft, customer-owned account, eligible beneficiaries |
 | Transaction history and statement | `/payments/`, `/payments/statement.csv` | Current customer's persisted payments and ledger debits |
 | Payment receipt | `/payments/<reference>/` | Current customer's payment, fraud decision, audit timeline, and ledger records |
 | Fraud intelligence and case review | `/payments/fraud/`, `/payments/fraud/cases/<id>/` | Staff or Fraud Analysts group only; persisted transactions, cases, and audit history |
 | Django administration | `/admin/` | Django's built-in administration; access follows Django staff permissions |
 
-There is no customer registration, custom settings page, standalone audit-history route, real-time notification feed, or external payment/fraud API in this project. Payment receipts show the persisted payment event history, and fraud case detail shows audited case changes. The interface does not present simulator results as live banking activity. Decorative animation and chart motion use CSS only and are disabled for reduced-motion preferences.
+There is no customer registration, general settings page, standalone audit-history route, real-time notification feed, or external payment/fraud API in this project. Payment receipts show the persisted payment event history, and fraud case detail shows audited case changes. The interface does not present simulator results as live banking activity. Decorative animation and chart motion use CSS only and are disabled for reduced-motion preferences.
+
+The profile stores only details a user supplies. Customer numbers use the `SYN` prefix; missing date of birth, mobile, address, KYC, and risk-assessment information remain clearly marked as not provided or not assessed. The profile form does not collect Aadhaar or PAN. Existing account balances are preserved during migration; the initial ledger balance is set to that current balance as a cutover snapshot, not represented as a reconstructed historical statement. Existing payments are backfilled as transaction records from their persisted payment outcomes.
 
 ## Demonstration fraud policy
 
@@ -65,7 +70,7 @@ python manage.py seed_demo
 python manage.py runserver
 ```
 
-Open http://127.0.0.1:8000/ and sign in as `demo.customer1` with the password set in `DEMO_PASSWORD`. Keep the terminal open while the server is running. `seed_demo` creates synthetic demo users, accounts, and beneficiaries; it does not reset existing data.
+Open http://127.0.0.1:8000/ and sign in as `demo.customer1` with the password set in `DEMO_PASSWORD`. Keep the terminal open while the server is running. `seed_demo` creates synthetic demo users, customer profiles, accounts, and beneficiaries; it does not reset existing data.
 
 Django reads configuration from process environment variables. A `.env` file is not automatically loaded. For a local-only demo, the settings have development defaults; use a unique secret key and `DJANGO_DEBUG=0` before any shared deployment. Configure `DJANGO_ALLOWED_HOSTS` and database environment variables explicitly when needed.
 
@@ -103,10 +108,11 @@ Fraud decisions are enforced before the simulator call. Held and rejected paymen
 
 ## Scope and limitations
 
-- The account data and gateway are synthetic; there are no real transfers, inbound payments, fees, or payment-provider integrations.
+- The account data and gateway are synthetic; there are no real transfers, inbound payments, fees, or payment-provider integrations. Transaction records reflect the local simulator outcome only.
 - The fraud rules and thresholds are fixed demonstration policy. Device/IP rules remain inactive because this app does not collect those signals.
 - Step-up authentication, payment reconciliation for unknown gateway outcomes, double-entry accounting, analyst case escalation notifications, PDF statements, real-time push updates, and production MySQL verification are not implemented.
 - Review cases are automatically created for held/rejected fraud decisions. The case workflow supports new, investigating, escalated, resolved, and false-positive states with audited updates.
 - Beneficiaries can be customer-owned or project-wide. Project-wide entries are available to every customer and can be created in Django admin by leaving the owner blank; `seed_demo` creates a shared sample utility beneficiary. Beneficiaries do not yet have a customer-facing management screen.
+- Customer KYC and risk values are status placeholders, not identity verification or a customer risk assessment. Account and transaction data does not represent a real bank account or bank-issued record.
 - Statements include requested amounts and ledger-backed debits; they are not bank-issued statements.
 - External web fonts are not required. Bootstrap styling is implemented locally in the project stylesheet.

@@ -5,7 +5,7 @@ from decimal import Decimal
 from django.contrib.auth import get_user_model
 from django.core.management.base import BaseCommand, CommandError
 
-from banking.models import BankAccount, Beneficiary
+from banking.models import BankAccount, Beneficiary, Customer
 
 DEMO_CUSTOMERS = [
     ("demo.customer1", "Asha", "Demo", 1),
@@ -33,8 +33,22 @@ class Command(BaseCommand):
             if created:
                 user.set_password(password)
                 user.save()
+            Customer.objects.get_or_create(
+                user=user,
+                defaults={
+                    "first_name": first,
+                    "last_name": last,
+                    "email": user.email,
+                },
+            )
             BankAccount.objects.get_or_create(
                 account_ref=f"SYN-{n:08d}",
-                defaults={"owner": user, "balance": Decimal("250000.00")},
+                defaults={
+                    "owner": user,
+                    "account_type": BankAccount.AccountType.SAVINGS,
+                    "balance": Decimal("250000.00"),
+                    "ledger_balance": Decimal("250000.00"),
+                    "account_status": BankAccount.AccountStatus.ACTIVE,
+                },
             )
         self.stdout.write("Demo customers are ready.")

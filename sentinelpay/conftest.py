@@ -21,7 +21,10 @@ def other_customer(db):
 @pytest.fixture
 def account(customer):
     return BankAccount.objects.create(
-        owner=customer, account_ref="T-0001", balance=Decimal("250000.00")
+        owner=customer,
+        account_ref="T-0001",
+        balance=Decimal("250000.00"),
+        ledger_balance=Decimal("250000.00"),
     )
 
 

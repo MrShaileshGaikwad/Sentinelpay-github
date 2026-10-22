@@ -1,15 +1,32 @@
 from datetime import date, datetime, time
+from django.contrib import messages
 from django.contrib.auth.decorators import login_required
+from django.db import transaction as db_transaction
 from django.db.models import Count, Q, Sum
-from django.shortcuts import render
+from django.shortcuts import redirect, render
 from django.utils import timezone
 
+from .forms import CustomerProfileForm
+from .models import Customer
 from payments.models import Payment
+
+
+def _customer_profile(user):
+    profile, _ = Customer.objects.get_or_create(
+        user=user,
+        defaults={
+            "first_name": user.first_name,
+            "last_name": user.last_name,
+            "email": user.email,
+        },
+    )
+    return profile
 
 
 @login_required
 def dashboard(request):
     # Every queryset is scoped to request.user on the server. Frontend hiding is not a control.
+    profile = _customer_profile(request.user)
     payments = Payment.objects.filter(customer=request.user)
     today = timezone.localdate()
     month_summary = payments.filter(
@@ -43,8 +60,11 @@ def dashboard(request):
         month["height"] = int(month["spend"] / max_spend * 100) if max_spend else 0
 
     context = {
+        "customer_profile": profile,
         "accounts": request.user.accounts.all(),
-        "recent_payments": payments.select_related("source_account")[:10],
+        "recent_payments": payments.select_related(
+            "source_account", "banking_transaction"
+        )[:10],
         "successful_count": payments.filter(status=Payment.Status.SUCCEEDED).count(),
         "monthly_payment_count": month_summary["count"] or 0,
         "monthly_spend": month_summary["spend"] or 0,
@@ -54,3 +74,24 @@ def dashboard(request):
         "monthly_activity": months,
     }
     return render(request, "banking/dashboard.html", context)
+
+
+@login_required
+def customer_profile(request):
+    profile = _customer_profile(request.user)
+    form = CustomerProfileForm(request.POST or None, instance=profile)
+    if request.method == "POST" and form.is_valid():
+        with db_transaction.atomic():
+            profile = form.save()
+            user = request.user
+            user.first_name = profile.first_name
+            user.last_name = profile.last_name
+            user.email = profile.email
+            user.save(update_fields=["first_name", "last_name", "email"])
+        messages.success(request, "Your customer profile has been updated.")
+        return redirect("dashboard")
+    return render(
+        request,
+        "banking/customer_profile.html",
+        {"form": form, "customer_profile": profile},
+    )

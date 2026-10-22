@@ -31,9 +31,11 @@ class PaymentForm(forms.Form):
     def __init__(self, *args, user, **kwargs):
         super().__init__(*args, **kwargs)
         # Limiting the querysets is the server-side ownership check. A foreign ID fails validation.
-        self.fields["source_account"].queryset = user.accounts.all()
+        self.fields["source_account"].queryset = user.accounts.filter(
+            account_status=BankAccount.AccountStatus.ACTIVE
+        )
         self.fields["beneficiary"].queryset = Beneficiary.objects.filter(
-            Q(owner=user) | Q(owner__isnull=True)
+            (Q(owner=user) | Q(owner__isnull=True)), is_active=True
         ).order_by("name")
 
 

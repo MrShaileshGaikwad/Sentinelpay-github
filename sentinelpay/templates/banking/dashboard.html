@@ -4,7 +4,7 @@
 <header class="page-heading">
   <div>
     <p class="eyebrow">Customer banking</p>
-    <h1 class="page-title">Good to see you, {{ user.first_name|default:user.get_username }}.</h1>
+    <h1 class="page-title">Good to see you, {{ customer_profile.full_name|default:user.get_username }}.</h1>
     <p class="page-subtitle">A clear view of your simulated account activity.</p>
   </div>
   <a class="btn btn-primary" href="{% url 'payments:new' %}">Make a payment <span aria-hidden="true">→</span></a>
@@ -33,6 +33,29 @@
   </article>
 </section>
 
+<section class="panel customer-profile-card" aria-labelledby="customer-profile-heading">
+  <div class="section-heading">
+    <div>
+      <h2 class="section-title" id="customer-profile-heading">Customer details</h2>
+      <p class="section-caption">Your personal profile for this simulated banking workspace</p>
+    </div>
+    <a class="btn-outline-soft" href="{% url 'customer-profile' %}">Edit profile</a>
+  </div>
+  {% if not customer_profile.profile_complete %}
+    <p class="profile-notice">Some details have not been provided. Add your information to complete your profile; SentinelPay does not invent personal or KYC details.</p>
+  {% endif %}
+  <dl class="customer-details-grid">
+    <div><dt>Customer number</dt><dd>{{ customer_profile.customer_number }}</dd></div>
+    <div><dt>Full name</dt><dd>{{ customer_profile.full_name|default:"Not provided" }}</dd></div>
+    <div><dt>Email address</dt><dd>{{ customer_profile.email|default:"Not provided" }}</dd></div>
+    <div><dt>Registered mobile</dt><dd>{{ customer_profile.phone_number|default:"Not provided" }}</dd></div>
+    <div><dt>Date of birth</dt><dd>{% if customer_profile.date_of_birth %}{{ customer_profile.date_of_birth|date:"d M Y" }}{% else %}Not provided{% endif %}</dd></div>
+    <div><dt>Address</dt><dd>{{ customer_profile.address|default:"Not provided"|linebreaksbr }}</dd></div>
+    <div><dt>KYC status</dt><dd>{{ customer_profile.get_kyc_status_display }}</dd></div>
+    <div><dt>Customer risk level</dt><dd>{{ customer_profile.get_risk_level_display }}</dd></div>
+  </dl>
+</section>
+
 <section class="account-grid" aria-labelledby="accounts-heading">
   <div class="section-heading">
     <div>
@@ -45,12 +68,14 @@
       <div class="col-12 col-md-6 col-lg-4">
         <article class="account-card">
           <div class="account-card-top">
-            <span class="account-label">Everyday account</span>
+            <span class="account-label">{{ account.get_account_type_display }} account</span>
             <span class="account-chip" aria-hidden="true"></span>
           </div>
           <p class="account-balance">{{ account.balance|floatformat:2 }}</p>
           <span class="account-currency">{{ account.currency }} · Available balance</span>
           <p class="account-ref mb-0">Account · {{ account.masked_ref }}</p>
+          <p class="account-ref mb-0">Ledger balance · {{ account.currency }} {{ account.ledger_balance|floatformat:2 }}</p>
+          <p class="account-ref mb-0">Status · {{ account.get_account_status_display }}</p>
         </article>
       </div>
     {% empty %}
@@ -89,7 +114,7 @@
 <section aria-labelledby="payments-heading">
   <div class="section-heading">
     <div>
-      <h2 class="section-title" id="payments-heading">Recent payments</h2>
+      <h2 class="section-title" id="payments-heading">Recent transactions</h2>
       <p class="section-caption">A snapshot of your latest activity</p>
     </div>
     <a class="payment-view" href="{% url 'payments:list' %}">View all activity <span aria-hidden="true">→</span></a>
@@ -97,18 +122,19 @@
   <div class="panel table-panel">
     <div class="table-responsive">
       <table class="table mb-0 align-middle">
-        <thead><tr><th scope="col">Merchant</th><th scope="col">Date</th><th scope="col" class="text-end">Amount</th><th scope="col">Status</th><th scope="col"><span class="visually-hidden">Details</span></th></tr></thead>
+        <thead><tr><th scope="col">Recipient / route</th><th scope="col">Transaction reference</th><th scope="col">Date</th><th scope="col" class="text-end">Amount</th><th scope="col">Status</th><th scope="col"><span class="visually-hidden">Details</span></th></tr></thead>
         <tbody>
         {% for p in recent_payments %}
           <tr>
-            <td><div class="merchant-name">{{ p.merchant_code }}</div><div class="merchant-sub">Card payment</div></td>
+            <td><div class="merchant-name">{{ p.beneficiary.name|default:p.merchant_code }}</div><div class="merchant-sub">{{ p.get_status_display }} · Simulator</div></td>
+            <td class="transaction-reference">{{ p.banking_transaction.transaction_reference|default:"—"|truncatechars:16 }}</td>
             <td>{{ p.created_at|date:"d M Y · H:i" }}</td>
             <td class="text-end amount-cell">{{ p.amount }} {{ p.currency }}</td>
             <td><span class="status-pill {% if p.status == 'SUCCEEDED' %}status-succeeded{% elif p.status == 'FAILED' or p.status == 'REJECTED' %}status-failed{% elif p.status == 'HELD_FOR_REVIEW' %}status-held{% elif p.status == 'UNKNOWN' %}status-unknown{% endif %}">{{ p.get_status_display }}</span></td>
             <td class="text-end"><a class="payment-view" href="{% url 'payments:detail' public_ref=p.public_ref %}">View <span aria-hidden="true">→</span></a></td>
           </tr>
         {% empty %}
-          <tr><td class="empty-state" colspan="5">No payments yet. Your activity will appear here after you make a payment.</td></tr>
+          <tr><td class="empty-state" colspan="6">No transactions yet. Your activity will appear here after you make a simulated payment.</td></tr>
         {% endfor %}
         </tbody>
       </table>

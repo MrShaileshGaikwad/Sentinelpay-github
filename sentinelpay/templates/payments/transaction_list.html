@@ -13,7 +13,7 @@
 <section aria-labelledby="history-heading">
   <div class="section-heading">
     <div>
-      <h2 class="section-title" id="history-heading">All payments</h2>
+      <h2 class="section-title" id="history-heading">All transactions</h2>
       <p class="section-caption">Newest activity appears first · {{ page_obj.paginator.count }} total</p>
     </div>
     <a class="btn-outline-soft" href="{% url 'payments:statement-csv' %}{% if filter_query %}?{{ filter_query }}{% endif %}">Download CSV</a>
@@ -37,6 +37,7 @@
         <thead>
           <tr>
             <th scope="col">Merchant</th>
+            <th scope="col">Transaction reference</th>
             <th scope="col">Date</th>
             <th scope="col">From account</th>
             <th scope="col" class="text-end">Amount</th>
@@ -47,7 +48,8 @@
         <tbody>
         {% for p in page_obj %}
           <tr>
-            <td><div class="merchant-name">{{ p.merchant_code }}</div><div class="merchant-sub">Ref · {{ p.public_ref|truncatechars:14 }}</div></td>
+            <td><div class="merchant-name">{{ p.beneficiary.name|default:p.merchant_code }}</div><div class="merchant-sub">{{ p.get_status_display }} · {{ p.merchant_code }}</div></td>
+            <td>{{ p.banking_transaction.transaction_reference|default:"—" }}</td>
             <td>{{ p.created_at|date:"d M Y · H:i" }}</td>
             <td>{{ p.source_account.masked_ref }}</td>
             <td class="text-end amount-cell">{{ p.amount|floatformat:2 }} {{ p.currency }}</td>
@@ -55,7 +57,7 @@
             <td class="text-end"><a class="payment-view" href="{% url 'payments:detail' public_ref=p.public_ref %}">View <span aria-hidden="true">→</span></a></td>
           </tr>
         {% empty %}
-          <tr><td class="empty-state" colspan="6">No payments yet. Your activity will appear here after you make a payment.</td></tr>
+          <tr><td class="empty-state" colspan="7">No transactions yet. Your activity will appear here after you make a simulated payment.</td></tr>
         {% endfor %}
         </tbody>
       </table>

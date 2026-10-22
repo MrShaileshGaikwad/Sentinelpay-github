@@ -19,7 +19,7 @@ from django.db.models import Avg, F, Q
 from django.utils import timezone
 
 from audit.services import record_event
-from banking.models import BankAccount, Beneficiary
+from banking.models import BankAccount, Beneficiary, Transaction
 from fraud_engine.engine import PaymentContext, evaluate
 
 from .gateway import SIMULATOR_MERCHANTS, GatewayOutcome, SimulatedGateway
@@ -88,8 +88,13 @@ def _build_context(customer, account, beneficiary, amount, now) -> PaymentContex
 
 def _post_debit(payment: Payment) -> bool:
     updated = BankAccount.objects.filter(
-        pk=payment.source_account_id, balance__gte=payment.amount
-    ).update(balance=F("balance") - payment.amount)
+        pk=payment.source_account_id,
+        balance__gte=payment.amount,
+        ledger_balance__gte=payment.amount,
+    ).update(
+        balance=F("balance") - payment.amount,
+        ledger_balance=F("ledger_balance") - payment.amount,
+    )
     if updated != 1:
         return False
     LedgerEntry.objects.create(account_id=payment.source_account_id, payment=payment, amount=-payment.amount)
@@ -108,14 +113,18 @@ def _record_stage(payment, customer, action, label):
 
 
 def _process(*, customer, account_id, beneficiary_id, amount, merchant_code, idempotency_key, fingerprint, now):
-    account = BankAccount.objects.select_for_update().filter(pk=account_id, owner=customer).first()
+    account = BankAccount.objects.select_for_update().filter(
+        pk=account_id, owner=customer
+    ).first()
     if account is None:
         raise PaymentError("Source account was not found.")
+    if account.account_status != BankAccount.AccountStatus.ACTIVE:
+        raise PaymentError("Payments can only be made from an active account.")
     beneficiary = None
     if beneficiary_id is not None:
         beneficiary = Beneficiary.objects.filter(pk=beneficiary_id).filter(
             Q(owner=customer) | Q(owner__isnull=True)
-        ).first()
+        ).filter(is_active=True).first()
         if beneficiary is None:
             raise PaymentError("Beneficiary was not found.")
     if amount > account.balance:
@@ -193,10 +202,32 @@ def _process(*, customer, account_id, beneficiary_id, amount, merchant_code, ide
             metadata={"severity": severity, "payment_ref": str(payment.public_ref)},
         )
 
+    transaction_record = Transaction.objects.create(
+        payment=payment,
+        account=account,
+        beneficiary=beneficiary,
+        transaction_type=(
+            Transaction.Type.TRANSFER if beneficiary else Transaction.Type.PAYMENT
+        ),
+        amount=payment.amount,
+        currency=payment.currency,
+        transaction_status=payment.status,
+        risk_score=evaluation.score,
+        created_at=payment.created_at,
+        processed_at=(
+            payment.updated_at
+            if payment.status not in (Status.SUBMITTED, Status.UNKNOWN)
+            else None
+        ),
+    )
     record_event(
         actor=customer, action=f"PAYMENT_{payment.status}", object_type="Payment", object_id=payment.pk,
         correlation_id=payment.public_ref,
-        metadata={"gateway_code": payment.gateway_code, "stage": f"Payment {payment.get_status_display().lower()}"},
+        metadata={
+            "gateway_code": payment.gateway_code,
+            "stage": f"Payment {payment.get_status_display().lower()}",
+            "transaction_reference": str(transaction_record.transaction_reference),
+        },
     )
     return payment
 

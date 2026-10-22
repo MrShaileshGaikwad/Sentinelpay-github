@@ -141,7 +141,9 @@ def payment_review(request):
 @login_required
 def payment_detail(request, public_ref):
     payment = get_object_or_404(
-        Payment.objects.select_related("source_account", "beneficiary"),
+        Payment.objects.select_related(
+            "source_account", "beneficiary", "banking_transaction"
+        ),
         public_ref=public_ref,
         customer=request.user,
     )
@@ -157,7 +159,9 @@ def payment_detail(request, public_ref):
 
 @login_required
 def payment_list(request):
-    payments = Payment.objects.filter(customer=request.user).select_related("source_account")
+    payments = Payment.objects.filter(customer=request.user).select_related(
+        "source_account", "beneficiary", "banking_transaction"
+    )
     filter_form, payments = _filtered_payments(request, payments)
     page_obj = Paginator(payments, 20).get_page(request.GET.get("page"))
     filters = request.GET.copy()

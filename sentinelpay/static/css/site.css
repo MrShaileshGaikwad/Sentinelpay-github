@@ -171,6 +171,34 @@ button, input, select { font: inherit; }
 .account-currency { color: #bfd0cf; font-size: 11px; }
 .account-ref { position: relative; z-index: 1; margin-top: 17px; color: #d8e6e4; font-size: 10px; letter-spacing: 1.15px; }
 .account-empty { padding: 26px; color: var(--muted); font-size: 12px; }
+.customer-profile-card { margin-bottom: 28px; padding: 22px; }
+.customer-details-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 17px 22px; margin: 0; }
+.customer-details-grid > div { min-width: 0; }
+.customer-details-grid dt { margin-bottom: 5px; color: #9aabc0; font-size: 9px; font-weight: 700; letter-spacing: .55px; text-transform: uppercase; }
+.customer-details-grid dd { margin: 0; color: #e2e8f0; font-size: 11px; overflow-wrap: anywhere; }
+.profile-notice { margin: 0 0 18px; padding: 11px 13px; border: 1px solid rgba(251,191,36,.2); border-radius: 9px; background: rgba(251,191,36,.06); color: #e8d6a1; font-size: 10px; line-height: 1.6; }
+.profile-form-panel { padding: 24px; }
+.profile-identity { display: flex; flex-direction: column; gap: 6px; margin-bottom: 18px; }
+.profile-number-label { color: #9aabc0; font-size: 9px; font-weight: 700; letter-spacing: .75px; text-transform: uppercase; }
+.profile-identity strong { color: #f1f5f9; font-size: 14px; letter-spacing: .7px; }
+.profile-form-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0 18px; }
+.profile-address-field { grid-column: 1 / -1; }
+.profile-form-actions { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 8px; }
+.form-field textarea {
+  display: block;
+  width: 100%;
+  min-height: 88px;
+  padding: 10px 13px;
+  border: 1px solid rgba(203,213,225,.18);
+  border-radius: 9px;
+  background-color: #111c30;
+  color: #f1f5f9;
+  font: inherit;
+  font-size: 12px;
+  resize: vertical;
+}
+.form-field textarea:focus { border-color: #10b981; outline: 0; background-color: #142239; box-shadow: 0 0 0 3px rgba(16,185,129,.14); }
+.transaction-reference { max-width: 180px; font-family: ui-monospace, SFMono-Regular, Consolas, monospace; font-size: 10px; overflow-wrap: anywhere; }
 .table-panel { padding: 18px 20px 4px; }
 .table-responsive { max-height: 540px; }
 .table { --bs-table-bg: transparent; --bs-table-color: var(--text); --bs-table-border-color: rgba(255,255,255,.065); margin-bottom: 0; color: var(--text); }
@@ -289,6 +317,9 @@ button, input, select { font: inherit; }
 
 @media (max-width: 767px) {
   .app-container { max-width: 100%; }
+  .customer-details-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .profile-form-grid { grid-template-columns: 1fr; }
+  .profile-address-field { grid-column: auto; }
   .col-md-6 { width: 100%; }
   .col-lg-4 { width: 100%; }
   .topbar { height: auto; min-height: 66px; }
@@ -658,3 +689,11 @@ body:before {
   }
   .chart-bar, .risk-distribution-bar, .risk-meter > span { transform: none !important; }
 }
+
+.customer-details-grid dt, .profile-number-label { color: #65748a; }
+.customer-details-grid dd { color: #344256; }
+.profile-notice { border-color: #f1d9a8; background: #fff8e8; color: #785308; }
+.profile-identity strong { color: #17263c; }
+.form-field textarea { border-color: #d7e0e9; background-color: #fff; color: #1e293b; }
+.form-field textarea:focus { border-color: #0f8b73; background-color: #fff; box-shadow: 0 0 0 3px rgba(15,139,115,.12); }
+.transaction-reference { color: #526176; }

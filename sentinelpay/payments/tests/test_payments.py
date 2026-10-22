@@ -8,7 +8,7 @@ from django.urls import reverse
 from django.utils import timezone
 
 from audit.models import AuditEvent
-from banking.models import BankAccount, Beneficiary
+from banking.models import BankAccount, Beneficiary, Customer, Transaction
 from payments.models import LedgerEntry, Payment
 from payments.services import IdempotencyConflict, InsufficientFunds, PaymentError, create_payment
 from payments.states import InvalidTransition, transition
@@ -41,8 +41,26 @@ def test_successful_payment_debits_once_and_records_ledger(customer, account, ol
     assert p.status == Payment.Status.SUCCEEDED
     assert p.gateway_code == "SIM_SUCCESS"
     assert balance(account) == Decimal("249500.00")
+    account.refresh_from_db()
+    assert account.ledger_balance == Decimal("249500.00")
     assert LedgerEntry.objects.filter(payment=p).count() == 1
     assert LedgerEntry.objects.get(payment=p).amount == Decimal("-500.00")
+    transaction_record = Transaction.objects.get(payment=p)
+    assert transaction_record.transaction_status == Transaction.Status.SUCCEEDED
+    assert transaction_record.transaction_type == Transaction.Type.TRANSFER
+    assert transaction_record.amount == Decimal("500.00")
+    assert transaction_record.beneficiary == old_beneficiary
+
+
+@pytest.mark.django_db
+def test_new_account_uses_supplied_available_balance_as_initial_ledger_balance(customer):
+    new_account = BankAccount.objects.create(
+        owner=customer,
+        account_ref="T-OPENING",
+        balance=Decimal("1200.00"),
+    )
+
+    assert new_account.ledger_balance == Decimal("1200.00")
 
 
 @pytest.mark.django_db
@@ -88,6 +106,9 @@ def test_gateway_timeout_is_unknown_not_success_and_retry_does_not_debit(custome
     assert retry.pk == p.pk
     assert retry.status == Payment.Status.UNKNOWN
     assert balance(account) == Decimal("250000.00")
+    transaction_record = Transaction.objects.get(payment=p)
+    assert transaction_record.transaction_status == Transaction.Status.UNKNOWN
+    assert transaction_record.processed_at is None
 
 
 @pytest.mark.django_db
@@ -103,6 +124,17 @@ def test_insufficient_balance_creates_no_payment(customer, account, old_benefici
     account.save()
     with pytest.raises(InsufficientFunds):
         pay(customer, account, old_beneficiary, amount="500.00")
+    assert Payment.objects.count() == 0
+
+
+@pytest.mark.django_db
+def test_frozen_account_cannot_make_payment(customer, account, old_beneficiary):
+    account.account_status = BankAccount.AccountStatus.FROZEN
+    account.save(update_fields=["account_status"])
+
+    with pytest.raises(PaymentError, match="active account"):
+        pay(customer, account, old_beneficiary)
+
     assert Payment.objects.count() == 0
 
 
@@ -177,7 +209,8 @@ def test_cannot_use_another_customers_beneficiary(customer, other_customer, acco
 def test_project_wide_beneficiary_can_be_used_by_any_customer(customer, other_customer, account):
     shared = Beneficiary.objects.create(owner=None, name="Shared Utility", destination_ref="SHARED")
     other_account = BankAccount.objects.create(
-        owner=other_customer, account_ref="T-OTHER", balance=Decimal("1000.00")
+        owner=other_customer, account_ref="T-OTHER", balance=Decimal("1000.00"),
+        ledger_balance=Decimal("1000.00"),
     )
     payment = pay(other_customer, other_account, shared)
     assert payment.beneficiary == shared
@@ -261,12 +294,103 @@ def test_customer_cannot_view_another_customers_payment(client, customer, other_
 
 @pytest.mark.django_db
 def test_form_only_offers_own_accounts(client, customer, other_customer, account, old_beneficiary):
-    BankAccount.objects.create(owner=other_customer, account_ref="T-OTHER", balance=Decimal("1.00"))
+    BankAccount.objects.create(
+        owner=other_customer, account_ref="T-OTHER", balance=Decimal("1.00"),
+        ledger_balance=Decimal("1.00"),
+    )
     client.force_login(customer)
     response = client.get(reverse("payments:new"))
     choices = [str(c[0]) for c in response.context["form"].fields["source_account"].choices if c[0]]
     assert str(account.pk) in choices
     assert all(BankAccount.objects.get(pk=int(c)).owner == customer for c in choices)
+
+
+@pytest.mark.django_db
+def test_payment_form_excludes_inactive_accounts_and_beneficiaries(
+    client, customer, account, old_beneficiary
+):
+    frozen = BankAccount.objects.create(
+        owner=customer,
+        account_ref="T-FROZEN",
+        balance=Decimal("1000.00"),
+        ledger_balance=Decimal("1000.00"),
+        account_status=BankAccount.AccountStatus.FROZEN,
+    )
+    inactive = Beneficiary.objects.create(
+        owner=customer,
+        name="Inactive Payee",
+        destination_ref="T-INACTIVE",
+        is_active=False,
+    )
+    client.force_login(customer)
+
+    response = client.get(reverse("payments:new"))
+
+    account_choices = {
+        str(value) for value, _ in response.context["form"].fields["source_account"].choices
+        if value
+    }
+    beneficiary_choices = {
+        str(value) for value, _ in response.context["form"].fields["beneficiary"].choices
+        if value
+    }
+    assert str(account.pk) in account_choices
+    assert str(frozen.pk) not in account_choices
+    assert str(old_beneficiary.pk) in beneficiary_choices
+    assert str(inactive.pk) not in beneficiary_choices
+
+
+@pytest.mark.django_db
+def test_customer_profile_is_editable_and_does_not_allow_customer_to_set_kyc(client, customer):
+    client.force_login(customer)
+
+    response = client.get(reverse("customer-profile"))
+
+    assert response.status_code == 200
+    assert b"not assessed" in response.content
+    profile = Customer.objects.get(user=customer)
+    assert profile.customer_number.startswith("SYN")
+    assert profile.kyc_status == Customer.KycStatus.NOT_PROVIDED
+
+    response = client.post(reverse("customer-profile"), {
+        "first_name": "Ananya",
+        "last_name": "Rao",
+        "email": "ananya@example.in",
+        "phone_number": "9876543210",
+        "date_of_birth": "1995-04-12",
+        "address": "Pune, Maharashtra",
+        "kyc_status": Customer.KycStatus.VERIFIED,
+        "risk_level": Customer.RiskLevel.LOW,
+    })
+
+    assert response.status_code == 302
+    profile.refresh_from_db()
+    customer.refresh_from_db()
+    assert profile.full_name == "Ananya Rao"
+    assert profile.phone_number == "+91 9876543210"
+    assert profile.profile_complete
+    assert profile.kyc_status == Customer.KycStatus.NOT_PROVIDED
+    assert profile.risk_level == Customer.RiskLevel.UNKNOWN
+    assert customer.first_name == "Ananya"
+    assert customer.email == "ananya@example.in"
+
+
+@pytest.mark.django_db
+def test_customer_profile_rejects_invalid_indian_mobile(client, customer):
+    client.force_login(customer)
+
+    response = client.post(reverse("customer-profile"), {
+        "first_name": "Ananya",
+        "last_name": "Rao",
+        "email": "ananya@example.in",
+        "phone_number": "12345",
+        "date_of_birth": "1995-04-12",
+        "address": "Pune, Maharashtra",
+    })
+
+    assert response.status_code == 200
+    assert b"valid 10-digit Indian mobile number" in response.content
+    assert Customer.objects.get(user=customer).phone_number == ""
 
 
 @pytest.mark.django_db
@@ -382,7 +506,8 @@ def test_detail_page_shows_risk_and_ledger(client, customer, account, old_benefi
 def test_statement_csv_is_customer_scoped_and_uses_ledger_debits(client, customer, other_customer, account, old_beneficiary):
     pay(customer, account, old_beneficiary)
     other_account = BankAccount.objects.create(
-        owner=other_customer, account_ref="T-OTHER", balance=Decimal("1000.00")
+        owner=other_customer, account_ref="T-OTHER", balance=Decimal("1000.00"),
+        ledger_balance=Decimal("1000.00"),
     )
     pay(other_customer, other_account, merchant="SIM-ERROR")
 
@@ -403,7 +528,8 @@ def test_dashboard_uses_customer_payment_data_and_masks_account_reference(
 ):
     pay(customer, account, old_beneficiary, now=timezone.now())
     other_account = BankAccount.objects.create(
-        owner=other_customer, account_ref="T-OTHER", balance=Decimal("1000.00")
+        owner=other_customer, account_ref="T-OTHER", balance=Decimal("1000.00"),
+        ledger_balance=Decimal("1000.00"),
     )
     pay(other_customer, other_account, merchant="SIM-GROCERY", key="other-payment", now=timezone.now())
     client.force_login(customer)

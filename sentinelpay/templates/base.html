@@ -36,6 +36,9 @@
     <a class="workspace-link {% if request.resolver_match.url_name == 'dashboard' %}is-active{% endif %}" href="{% url 'dashboard' %}" {% if request.resolver_match.url_name == 'dashboard' %}aria-current="page"{% endif %}>
       <span class="workspace-icon" aria-hidden="true">⌂</span><span>Overview</span>
     </a>
+    <a class="workspace-link {% if request.resolver_match.url_name == 'customer-profile' %}is-active{% endif %}" href="{% url 'customer-profile' %}" {% if request.resolver_match.url_name == 'customer-profile' %}aria-current="page"{% endif %}>
+      <span class="workspace-icon" aria-hidden="true">◎</span><span>Customer profile</span>
+    </a>
     <a class="workspace-link {% if request.resolver_match.url_name == 'new' or request.resolver_match.url_name == 'review' %}is-active{% endif %}" href="{% url 'payments:new' %}" {% if request.resolver_match.url_name == 'new' or request.resolver_match.url_name == 'review' %}aria-current="page"{% endif %}>
       <span class="workspace-icon" aria-hidden="true">↗</span><span>Payments</span>
     </a>
