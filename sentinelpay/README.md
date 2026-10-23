@@ -5,6 +5,7 @@ SentinelPay is a synthetic digital-banking and payment-fraud demonstration built
 ## Current features
 
 - Customer sign-in, account overview, masked synthetic account references, and a six-month chart of successful payments based on stored payment records.
+- Public customer registration with username/password authentication, a linked customer profile, and a clearly synthetic savings account with an INR 250,000.00 demo starting balance; no real bank account is opened or linked.
 - Indian-banking-style customer profiles with customer-editable contact details, synthetic customer numbers, explicit unknown KYC/risk states, and account type/status plus separate available and ledger balances.
 - Two-step payment experience: enter details, review the amount and source account, then confirm before server-side validation and screening.
 - A persistent transaction record for each payment, linked to its source account and optional beneficiary, with the recorded status, risk score, reference, and processing time.
@@ -26,6 +27,7 @@ SentinelPay is a synthetic digital-banking and payment-fraud demonstration built
 | Page | Route | Data and access |
 | --- | --- | --- |
 | Sign in | `/login/` | Django session authentication |
+| Create account | `/register/` | Public; creates a SentinelPay user and customer profile |
 | Account overview | `/` | Current customer's profile, accounts, balances, and payment records |
 | Customer profile | `/profile/` | Authenticated customer can edit their name, email, Indian mobile, date of birth, and address |
 | Payment details and review | `/payments/new/`, `/payments/review/` | Server-validated payment draft, customer-owned account, eligible beneficiaries |
@@ -34,7 +36,7 @@ SentinelPay is a synthetic digital-banking and payment-fraud demonstration built
 | Fraud intelligence and case review | `/payments/fraud/`, `/payments/fraud/cases/<id>/` | Staff or Fraud Analysts group only; persisted transactions, cases, and audit history |
 | Django administration | `/admin/` | Django's built-in administration; access follows Django staff permissions |
 
-There is no customer registration, general settings page, standalone audit-history route, real-time notification feed, or external payment/fraud API in this project. Payment receipts show the persisted payment event history, and fraud case detail shows audited case changes. The interface does not present simulator results as live banking activity. Decorative animation and chart motion use CSS only and are disabled for reduced-motion preferences.
+There is no email verification, self-service password reset, general settings page, standalone audit-history route, real-time notification feed, or external payment/fraud API in this project. Public registration creates a SentinelPay login and customer profile only; it does not open or connect a real bank account. Payment receipts show the persisted payment event history, and fraud case detail shows audited case changes. The interface does not present simulator results as live banking activity. Decorative animation and chart motion use CSS only and are disabled for reduced-motion preferences.
 
 The profile stores only details a user supplies. Customer numbers use the `SYN` prefix; missing date of birth, mobile, address, KYC, and risk-assessment information remain clearly marked as not provided or not assessed. The profile form does not collect Aadhaar or PAN. Existing account balances are preserved during migration; the initial ledger balance is set to that current balance as a cutover snapshot, not represented as a reconstructed historical statement. Existing payments are backfilled as transaction records from their persisted payment outcomes.
 
@@ -74,7 +76,7 @@ Open http://127.0.0.1:8000/ and sign in as `demo.customer1` with the password se
 
 Payment source accounts are only shown to their owning user. Signing in with a Django administrator account does not automatically give that account customer bank accounts; use one of the seeded demo customer accounts or link an account in Django administration. The beneficiary selector appears below the source account and lists active personal or project-wide beneficiaries. If none exist, merchant payments can still be made without a beneficiary.
 
-Django reads configuration from process environment variables. A `.env` file is not automatically loaded. For a local-only demo, the settings have development defaults; use a unique secret key and `DJANGO_DEBUG=0` before any shared deployment. Configure `DJANGO_ALLOWED_HOSTS` and database environment variables explicitly when needed.
+Django reads configuration from process environment variables and the optional, git-ignored `.env` file. To use MySQL, copy `.env.example` to `.env`, set `DB_PASSWORD` to your local MySQL password, and set `DB_NAME` to a new or intentionally selected schema. Keep credentials local and never put them in `.env.example`. Start MySQL Server, then use `python manage.py migrate` and `python manage.py runserver` from the `sentinelpay` directory. MySQL is only used when `DB_ENGINE=mysql`; otherwise SentinelPay continues to use SQLite. Changing the database setting does not copy existing SQLite records; export/import application data separately, and do not load a fixture into populated tables without checking for primary-key conflicts. For a local-only demo, the settings have development defaults; use a unique secret key and `DJANGO_DEBUG=0` before any shared deployment. Configure `DJANGO_ALLOWED_HOSTS` and database environment variables explicitly when needed.
 
 ## Fraud analyst access
 
@@ -87,7 +89,7 @@ python manage.py check
 python -m pytest -v
 ```
 
-Tests use SQLite. MySQL configuration exists but has not been verified in this environment.
+The test suite passes on SQLite and the configured local MySQL server.
 
 ## Optional VS Code Git auto-sync
 

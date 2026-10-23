@@ -15,8 +15,16 @@ class BeneficiaryChoiceField(forms.ModelChoiceField):
         return f"{label} (Project-wide)" if obj.owner_id is None else label
 
 
+class BankAccountChoiceField(forms.ModelChoiceField):
+    def label_from_instance(self, obj):
+        return (
+            f"{obj.masked_ref} · {obj.currency} "
+            f"{obj.balance:,.2f} available"
+        )
+
+
 class PaymentForm(forms.Form):
-    source_account = forms.ModelChoiceField(queryset=BankAccount.objects.none())
+    source_account = BankAccountChoiceField(queryset=BankAccount.objects.none())
     beneficiary = BeneficiaryChoiceField(
         queryset=Beneficiary.objects.none(),
         required=False,

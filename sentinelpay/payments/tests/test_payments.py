@@ -2,6 +2,7 @@ from datetime import datetime, timedelta
 from decimal import Decimal
 
 import pytest
+from django.contrib.auth import get_user_model
 from django.contrib.auth.models import Group
 from django.db import IntegrityError, transaction
 from django.urls import reverse
@@ -264,6 +265,78 @@ def test_dashboard_requires_login(client):
 
 
 @pytest.mark.django_db
+def test_login_and_registration_pages_link_to_each_other(client):
+    response = client.get(reverse("login"))
+    assert response.status_code == 200
+    assert b"Create an account" in response.content
+
+    response = client.get(reverse("register"))
+    assert response.status_code == 200
+    assert b"Log in to your existing account" in response.content
+
+
+@pytest.mark.django_db
+def test_registration_creates_customer_and_signs_user_in(client):
+    response = client.post(reverse("register"), {
+        "username": "new.customer",
+        "first_name": "Mira",
+        "last_name": "Shah",
+        "email": "mira@example.in",
+        "password1": "Secure-Unique-Password-2026!",
+        "password2": "Secure-Unique-Password-2026!",
+    })
+
+    assert response.status_code == 302
+    assert response.url == reverse("dashboard")
+    user = get_user_model().objects.get(username="new.customer")
+    profile = Customer.objects.get(user=user)
+    assert profile.full_name == "Mira Shah"
+    assert profile.email == "mira@example.in"
+    assert user.check_password("Secure-Unique-Password-2026!")
+    assert int(client.session["_auth_user_id"]) == user.pk
+    account = BankAccount.objects.get(owner=user)
+    assert account.account_type == BankAccount.AccountType.SAVINGS
+    assert account.currency == "INR"
+    assert account.balance == Decimal("250000.00")
+    assert account.ledger_balance == Decimal("250000.00")
+    assert account.account_status == BankAccount.AccountStatus.ACTIVE
+
+    payment_page = client.get(reverse("payments:new"))
+    source_field = payment_page.context["form"].fields["source_account"]
+    assert source_field.queryset.get() == account
+    assert b"INR 250,000.00 available" in payment_page.content
+
+
+@pytest.mark.django_db
+def test_registration_rejects_mismatched_passwords(client):
+    response = client.post(reverse("register"), {
+        "username": "new.customer",
+        "first_name": "Mira",
+        "last_name": "Shah",
+        "email": "mira@example.in",
+        "password1": "Secure-Unique-Password-2026!",
+        "password2": "Different-Password-2026!",
+    })
+
+    assert response.status_code == 200
+    assert response.context["form"].errors["password2"]
+    assert not get_user_model().objects.filter(username="new.customer").exists()
+
+
+@pytest.mark.django_db
+def test_source_account_choices_include_balance_for_active_owned_accounts(
+    client, customer, account
+):
+    client.force_login(customer)
+
+    response = client.get(reverse("payments:new"))
+
+    source_field = response.context["form"].fields["source_account"]
+    assert list(source_field.queryset) == [account]
+    assert b"INR 250,000.00 available" in response.content
+
+
+@pytest.mark.django_db
 def test_transaction_history_requires_login_and_only_shows_customer_payments(
     client, customer, other_customer, account
 ):
@@ -390,6 +463,32 @@ def test_customer_profile_is_editable_and_does_not_allow_customer_to_set_kyc(cli
     assert profile.risk_level == Customer.RiskLevel.UNKNOWN
     assert customer.first_name == "Ananya"
     assert customer.email == "ananya@example.in"
+
+
+@pytest.mark.django_db
+def test_header_uses_customer_profile_name(client, customer):
+    Customer.objects.create(user=customer, first_name="Sharvari", last_name="Kshirsagar")
+    client.force_login(customer)
+
+    response = client.get(reverse("dashboard"))
+
+    assert b'<span class="avatar">S</span>' in response.content
+    assert b'<span class="nav-username">Sharvari Kshirsagar</span>' in response.content
+    assert b"alice</span>" not in response.content
+
+
+@pytest.mark.django_db
+def test_sign_out_returns_to_login_page(client, customer):
+    client.force_login(customer)
+
+    response = client.post(reverse("logout"))
+
+    assert response.status_code == 302
+    assert response.url == reverse("login")
+    response = client.get(response.url)
+    assert response.status_code == 200
+    assert b"Welcome back" in response.content
+    assert "_auth_user_id" not in client.session
 
 
 @pytest.mark.django_db

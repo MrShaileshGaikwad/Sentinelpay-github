@@ -61,7 +61,7 @@ The distribution ZIP intentionally excludes `db.sqlite3`, Git metadata, virtual 
 | --- | --- |
 | `manage.py` | Django command-line entry point for checks, migrations, seeding, and the development server. |
 | `sentinelpay/settings.py` | Installed apps, middleware, templates, static files, authentication, environment variables, and database selection. SQLite is the default; optional MySQL requires environment configuration. |
-| `sentinelpay/urls.py` | Root route table: admin, login, logout, overview, and the payments URL include. |
+| `sentinelpay/urls.py` | Root route table: admin, registration, login, logout, overview, and the payments URL include. |
 | `sentinelpay/wsgi.py` | WSGI entry point for compatible application servers. |
 | `requirements.txt` | Pinned Django and pytest dependencies; MySQL client is optional. |
 | `pytest.ini`, `conftest.py` | Pytest/Django settings and shared customer, account, and beneficiary fixtures. |
@@ -116,12 +116,13 @@ Audit records support payment timelines and case history; they are not currently
 
 ### `sentinelpay/`
 
-Contains Django configuration rather than product domain logic. `settings.py` selects database configuration and template/static handling. `urls.py` declares global routing and uses Django's standard login, logout, and admin views.
+Contains Django configuration rather than product domain logic. `settings.py` selects database configuration and template/static handling. `urls.py` declares global routing, including the custom customer registration view and Django's standard login, logout, and admin views.
 
 ### `templates/` and `static/`
 
 - `templates/base.html`: shared document shell, branding, accessible navigation, messages, and footer.
 - `templates/registration/login.html`: sign-in form presentation; authentication itself is Django's built-in view.
+- `templates/registration/register.html`: public customer account registration form presentation.
 - `templates/banking/dashboard.html`: customer details, account balances, spend, activity, and recent-transaction presentation using context from the banking view.
 - `templates/banking/customer_profile.html`: customer-editable name and contact/profile fields; it does not expose KYC/risk status as editable inputs.
 - `templates/payments/`: payment form, confirmation/review, transaction list, receipt, fraud queue, and case detail.

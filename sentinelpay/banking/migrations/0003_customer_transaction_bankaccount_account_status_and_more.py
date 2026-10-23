@@ -149,10 +149,18 @@ class Migration(migrations.Migration):
             name='account_ref',
             field=models.CharField(db_column='account_number', max_length=34, unique=True),
         ),
+        migrations.RemoveConstraint(
+            model_name='bankaccount',
+            name='balance_non_negative',
+        ),
         migrations.AlterField(
             model_name='bankaccount',
             name='balance',
             field=models.DecimalField(db_column='available_balance', decimal_places=2, default=Decimal('0.00'), max_digits=18),
+        ),
+        migrations.AddConstraint(
+            model_name='bankaccount',
+            constraint=models.CheckConstraint(condition=models.Q(('balance__gte', 0)), name='balance_non_negative'),
         ),
         migrations.AlterField(
             model_name='beneficiary',

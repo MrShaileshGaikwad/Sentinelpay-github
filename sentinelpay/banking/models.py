@@ -12,6 +12,10 @@ def generate_customer_number():
     return f"SYN{uuid4().hex[:17].upper()}"
 
 
+def generate_account_ref():
+    return f"SYN-ACC-{uuid4().hex[:16].upper()}"
+
+
 class Customer(models.Model):
     class KycStatus(models.TextChoices):
         NOT_PROVIDED = "NOT_PROVIDED", "Details not provided"

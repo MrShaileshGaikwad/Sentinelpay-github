@@ -21,7 +21,7 @@ This SRS records the current functional and non-functional requirements for Sent
 
 SentinelPay demonstrates customer sign-in and profile editing, synthetic Indian-banking-style account viewing, payment creation and review, deterministic fraud screening, simulated payment outcomes, persistent transaction records, ledger-backed debits, transaction history, CSV statements, fraud case review, and append-only audit events.
 
-The product is not a production banking system. It does not connect to financial institutions, move real funds, or provide regulated financial services. Profile fields are customer-provided; KYC and risk statuses are placeholders, not verified results. The default database is SQLite; optional MySQL configuration is present but unverified.
+The product is not a production banking system. It does not connect to financial institutions, move real funds, or provide regulated financial services. Profile fields are customer-provided; KYC and risk statuses are placeholders, not verified results. The default database is SQLite; optional MySQL configuration is supported and tested locally.
 
 ### 1.3 Definitions
 
@@ -79,8 +79,8 @@ SentinelPay is a single Django web application. Django handles sessions, forms, 
 
 - Customers, accounts, and beneficiary records are synthetic demonstration records.
 - The available merchant codes select deterministic local outcomes.
-- Django environment settings are provided through process environment variables; `.env.example` is a placeholder and is not automatically loaded.
-- Users and fraud-review permissions are provisioned by an administrator or development setup; there is no registration feature.
+- Django environment settings are provided through process environment variables or a local `.env` file; `.env.example` is a placeholder and is not loaded.
+- Customers can create a SentinelPay demo login, customer profile, and synthetic savings account with a fixed INR 250,000.00 demonstration balance through public registration. This does not open a real bank account or represent real funds; staff/fraud-review permissions remain administrator-managed.
 - Fraud policy limits and weights are educational configuration and are not production controls.
 - A deployment must configure a secure secret, allowed hosts, HTTPS, database credentials, and production-appropriate Django settings.
 
@@ -95,7 +95,8 @@ Priority definitions: **Must** is required for the current demonstrated behavior
 - **FR-AUTH-03 (Must):** Successful login shall redirect the authenticated user to the configured landing page.
 - **FR-AUTH-04 (Must):** An authenticated user shall be able to sign out using a CSRF-protected POST and shall lose access to authenticated pages until signing in again.
 - **FR-AUTH-05 (Must):** Invalid credentials shall not establish an authenticated session and shall return an error on the sign-in page.
-- **FR-AUTH-06 (Out of scope):** Public registration, email verification, password reset, MFA, and identity proofing are not provided.
+- **FR-AUTH-06 (Must):** A visitor shall be able to create a SentinelPay login by submitting a unique username, first and last name, email address, and password that satisfies configured Django password validation. The system shall create a linked customer profile and synthetic savings account with an INR 250,000.00 demonstration balance, then authenticate the new user; this does not open or link a real bank account.
+- **FR-AUTH-09 (Out of scope):** Email verification, self-service password reset, MFA, and identity proofing are not provided.
 - **FR-AUTH-07 (Must):** An authenticated customer shall be able to edit only their linked name, email, Indian mobile number, date of birth, and address.
 - **FR-AUTH-08 (Must):** The customer profile form shall not permit customers to set KYC status or customer risk classification; missing personal details shall remain explicitly unprovided.
 
@@ -284,6 +285,7 @@ Visitor -> Login -> Authenticated customer -> Overview -> Edit profile
 | Route | Function | Access |
 | --- | --- | --- |
 | `/login/` | Sign in | Public |
+| `/register/` | Create SentinelPay login and customer profile | Public |
 | `/logout/` | Sign out | Authenticated session; POST |
 | `/` | Customer overview | Authenticated |
 | `/profile/` | View/update own customer details | Authenticated; own profile only |
@@ -301,24 +303,25 @@ Visitor -> Login -> Authenticated customer -> Overview -> Edit profile
 The implementation is acceptable for the current scope when:
 
 1. Anonymous access to protected customer routes, including profile editing, redirects to login.
-2. A customer cannot see another user's account, payment, receipt, or statement data.
-3. A customer can select their own or project-wide beneficiary but not another user's private beneficiary.
-4. Payment review happens before payment creation, and cancellation creates no payment.
-5. Repeating a confirmed request with the same key does not debit twice; reusing the key for changed data is rejected.
-6. Fraud decisions are generated on the server, persist on the payment, and control whether the gateway is called.
-7. Each processed payment creates one linked transaction with its persisted status and risk result.
-8. Only simulator success creates one ledger debit and updates available/ledger balances; timeout/failure/hold/rejection do not.
-9. Customer profile saves validate Indian mobile numbers and cannot override KYC/risk status.
-10. Fraud operations reject unauthorized users and append audit records for permitted case changes.
-11. Dashboard and fraud visualizations display stored backend data.
-12. `python manage.py check` and the automated pytest suite pass.
+2. Registration creates a customer user/profile and synthetic savings account with the configured demonstration balance, enforces password matching and validation, and does not create a real bank account.
+3. A customer cannot see another user's account, payment, receipt, or statement data.
+4. A customer can select their own or project-wide beneficiary but not another user's private beneficiary.
+5. Payment review happens before payment creation, and cancellation creates no payment.
+6. Repeating a confirmed request with the same key does not debit twice; reusing the key for changed data is rejected.
+7. Fraud decisions are generated on the server, persist on the payment, and control whether the gateway is called.
+8. Each processed payment creates one linked transaction with its persisted status and risk result.
+9. Only simulator success creates one ledger debit and updates available/ledger balances; timeout/failure/hold/rejection do not.
+10. Customer profile saves validate Indian mobile numbers and cannot override KYC/risk status.
+11. Fraud operations reject unauthorized users and append audit records for permitted case changes.
+12. Dashboard and fraud visualizations display stored backend data.
+13. `python manage.py check` and the automated pytest suite pass.
 
 The test suite currently has coverage for fraud-engine rules and payment behavior. Browser rendering has been inspected for the sign-in page at mobile and desktop sizes; that visual check does not substitute for automated browser coverage of every route.
 
 ## 10. Out-of-scope features and known limitations
 
 - Real banking/provider transfers, real balances, and external payment APIs.
-- Account opening, customer registration, self-service password reset, and MFA.
+- Real bank account opening, self-service password reset, and MFA.
 - Government identity verification, real KYC decisions, and production customer-risk assessment.
 - Payment fees, configured per-transaction limits, and step-up authentication.
 - Device fingerprinting, IP geolocation, external fraud intelligence, or ML scoring.

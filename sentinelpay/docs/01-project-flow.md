@@ -21,7 +21,7 @@ The visitor opens `/`. The dashboard view is protected by Django's `login_requir
 
 The sign-in page uses Django's built-in `LoginView` with the SentinelPay login template. The browser submits the username and password over a CSRF-protected POST. Django checks the credentials and creates an authenticated session. Successful sign-in redirects to the configured dashboard (`LOGIN_REDIRECT_URL`); invalid credentials return the sign-in page with an error.
 
-There is no public registration or password-reset workflow in the current routes. User accounts are managed by Django administration or project setup.
+The sign-in page links to `/register/` for new customers. Registration collects a username, name, email, and password; it creates a Django user, linked customer profile, and synthetic active INR savings account with a 250,000.00 demo starting balance in a transaction, validates passwords with Django's configured validators, and signs the new user in. This does not open or link a real bank account or represent real funds. Email verification and self-service password reset are not available.
 
 ### 3. View the customer overview
 
@@ -105,14 +105,14 @@ The shared navigation submits a CSRF-protected POST to `/logout/`. Django's buil
 ## Data and configuration flow
 
 - SQLite is the default database, stored at the project root as `db.sqlite3`.
-- Setting `DB_ENGINE=mysql` switches settings to the configured MySQL environment variables. MySQL is optional and has not been verified as part of the current setup.
-- Credentials and settings are read from process environment variables. `.env.example` contains placeholders; Django does not automatically load a `.env` file.
+- Setting `DB_ENGINE=mysql` switches settings to the configured MySQL environment variables. The optional `.env` file is loaded for local configuration.
+- Credentials and settings are read from process environment variables or the git-ignored `.env` file. `.env.example` contains placeholders only.
 - `python manage.py migrate` applies schema migrations. This document does not imply that a migration has already been applied to a particular local database.
 - The banking schema migration backfills customer profiles from names/emails already stored in Django users and transaction records from existing payments. It preserves the existing available balance and initializes ledger balance to that value as a cutover snapshot; it cannot reconstruct historical opening balances or ledger balances.
 
 ## Current flow limitations
 
 - Payments are simulated; no real payment network or provider is contacted.
-- There is no public registration, customer control of KYC/risk classifications, live transaction feed, or external fraud API.
+- There is no email verification, self-service password reset, customer control of KYC/risk classifications, live transaction feed, or external fraud API.
 - Unknown gateway outcomes remain unresolved until a future reconciliation feature exists.
 - Payment limits, fees, step-up authentication, and customer-managed beneficiary creation are not implemented.

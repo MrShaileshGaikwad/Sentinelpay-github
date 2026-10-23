@@ -18,8 +18,8 @@
     {% if user.is_authenticated %}
     <div class="nav-actions">
       <div class="nav-user">
-        <span class="avatar">{{ user.get_username|slice:":1"|upper }}</span>
-        <span class="nav-username">{{ user.get_username }}</span>
+        <span class="avatar">{{ account_display_name|slice:":1"|upper }}</span>
+        <span class="nav-username">{{ account_display_name }}</span>
       </div>
       <form method="post" action="{% url 'logout' %}" class="m-0">
         {% csrf_token %}

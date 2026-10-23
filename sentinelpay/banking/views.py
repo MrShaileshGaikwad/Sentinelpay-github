@@ -1,14 +1,49 @@
 from datetime import date, datetime, time
+from decimal import Decimal
 from django.contrib import messages
+from django.contrib.auth import login
 from django.contrib.auth.decorators import login_required
 from django.db import transaction as db_transaction
 from django.db.models import Count, Q, Sum
 from django.shortcuts import redirect, render
 from django.utils import timezone
 
-from .forms import CustomerProfileForm
-from .models import Customer
+from .forms import CustomerProfileForm, CustomerRegistrationForm
+from .models import BankAccount, Customer, generate_account_ref
 from payments.models import Payment
+
+
+DEMO_ACCOUNT_STARTING_BALANCE = Decimal("250000.00")
+
+
+def register(request):
+    if request.user.is_authenticated:
+        return redirect("dashboard")
+
+    form = CustomerRegistrationForm(request.POST or None)
+    if request.method == "POST" and form.is_valid():
+        with db_transaction.atomic():
+            user = form.save()
+            Customer.objects.create(
+                user=user,
+                first_name=user.first_name,
+                last_name=user.last_name,
+                email=user.email,
+            )
+            BankAccount.objects.create(
+                owner=user,
+                account_ref=generate_account_ref(),
+                account_type=BankAccount.AccountType.SAVINGS,
+                currency="INR",
+                balance=DEMO_ACCOUNT_STARTING_BALANCE,
+                account_status=BankAccount.AccountStatus.ACTIVE,
+                opened_at=timezone.now(),
+            )
+        login(request, user)
+        messages.success(request, "Your SentinelPay account has been created.")
+        return redirect("dashboard")
+
+    return render(request, "registration/register.html", {"form": form})
 
 
 def _customer_profile(user):
@@ -29,8 +64,18 @@ def dashboard(request):
     profile = _customer_profile(request.user)
     payments = Payment.objects.filter(customer=request.user)
     today = timezone.localdate()
+    current_month_start = date(today.year, today.month, 1)
+    if today.month == 12:
+        next_month_start = date(today.year + 1, 1, 1)
+    else:
+        next_month_start = date(today.year, today.month + 1, 1)
     month_summary = payments.filter(
-        created_at__year=today.year, created_at__month=today.month
+        created_at__gte=timezone.make_aware(
+            datetime.combine(current_month_start, time.min)
+        ),
+        created_at__lt=timezone.make_aware(
+            datetime.combine(next_month_start, time.min)
+        ),
     ).aggregate(
         count=Count("pk", filter=Q(status=Payment.Status.SUCCEEDED)),
         spend=Sum("amount", filter=Q(status=Payment.Status.SUCCEEDED)),

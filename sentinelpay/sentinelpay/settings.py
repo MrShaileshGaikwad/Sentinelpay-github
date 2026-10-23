@@ -7,7 +7,11 @@ from environment variables; nothing sensitive is committed.
 import os
 from pathlib import Path
 
+from django.core.exceptions import ImproperlyConfigured
+from dotenv import load_dotenv
+
 BASE_DIR = Path(__file__).resolve().parent.parent
+load_dotenv(BASE_DIR / ".env")
 
 SECRET_KEY = os.environ.get("DJANGO_SECRET_KEY", "insecure-dev-key-replace-before-any-deployment")
 DEBUG = os.environ.get("DJANGO_DEBUG", "1") == "1"
@@ -48,6 +52,7 @@ TEMPLATES = [
                 "django.contrib.auth.context_processors.auth",
                 "django.contrib.messages.context_processors.messages",
                 "banking.context_processors.fraud_access",
+                "banking.context_processors.customer_identity",
             ],
         },
     },
@@ -56,12 +61,17 @@ TEMPLATES = [
 WSGI_APPLICATION = "sentinelpay.wsgi.application"
 
 if os.environ.get("DB_ENGINE", "sqlite").lower() == "mysql":
+    db_password = os.environ.get("DB_PASSWORD", "")
+    if not db_password or db_password == "replace-with-db-password":
+        raise ImproperlyConfigured(
+            "Set DB_PASSWORD in the local .env file before using MySQL."
+        )
     DATABASES = {
         "default": {
             "ENGINE": "django.db.backends.mysql",
-            "NAME": os.environ.get("DB_NAME", "MYBANK"),
+            "NAME": os.environ.get("DB_NAME", "mybank"),
             "USER": os.environ.get("DB_USER", "root"),
-            "PASSWORD": os.environ.get("DB_PASSWORD", "Professor@17"),
+            "PASSWORD": db_password,
             "HOST": os.environ.get("DB_HOST", "127.0.0.1"),
             "PORT": os.environ.get("DB_PORT", "3306"),
             "OPTIONS": {
@@ -95,6 +105,7 @@ DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 
 LOGIN_URL = "login"
 LOGIN_REDIRECT_URL = "dashboard"
+LOGOUT_REDIRECT_URL = "login"
 
 # Cookie and header hardening applies whenever DEBUG is off.
 SESSION_COOKIE_HTTPONLY = True
