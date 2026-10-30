@@ -102,13 +102,13 @@
       </div>
       {% endfor %}
     </div>
-    <p class="chart-footnote">Values reflect successful payments recorded in your account. No incoming transfers are recorded in this demo.</p>
+    <p class="chart-footnote">Values reflect successful payments recorded in your account. Imported MyBank demo activity is shown in transaction history and is not used to recalculate balances or this chart.</p>
   </div>
 </section>
 
 <section class="quick-actions" aria-label="Quick actions">
   <a class="quick-action" href="{% url 'payments:new' %}"><span>↗</span><strong>Transfer money</strong><small>Start a simulated payment</small></a>
-  <a class="quick-action" href="{% url 'payments:list' %}"><span>≡</span><strong>View transactions</strong><small>Search your activity</small></a>
+  <a class="quick-action" href="{% url 'transaction-history' %}"><span>≡</span><strong>View transactions</strong><small>Review account activity</small></a>
   <a class="quick-action" href="{% url 'payments:statement-csv' %}"><span>↓</span><strong>Download statement</strong><small>Export your transaction history</small></a>
 </section>
 
@@ -116,30 +116,145 @@
   <div class="section-heading">
     <div>
       <h2 class="section-title" id="payments-heading">Recent transactions</h2>
-      <p class="section-caption">A snapshot of your latest activity</p>
+      <p class="section-caption">Live account activity · refreshes every {{ transaction_poll_interval_ms }} ms</p>
     </div>
-    <a class="payment-view" href="{% url 'payments:list' %}">View all activity <span aria-hidden="true">→</span></a>
+    <a class="payment-view" href="{% url 'transaction-history' %}">View all activity <span aria-hidden="true">→</span></a>
   </div>
-  <div class="panel table-panel">
+  <div id="transaction-monitor"
+       data-url="{% url 'recent-transactions-api' %}"
+       data-poll-interval="{{ transaction_poll_interval_ms }}">
+    <p id="transaction-monitor-state" class="section-caption" role="status" aria-live="polite">Loading latest transaction updates…</p>
+    <div class="panel table-panel">
     <div class="table-responsive">
       <table class="table mb-0 align-middle">
-        <thead><tr><th scope="col">Recipient / route</th><th scope="col">Transaction reference</th><th scope="col">Date</th><th scope="col" class="text-end">Amount</th><th scope="col">Status</th><th scope="col"><span class="visually-hidden">Details</span></th></tr></thead>
-        <tbody>
-        {% for p in recent_payments %}
+        <thead><tr><th scope="col">Recipient / route</th><th scope="col">Transaction reference</th><th scope="col">Date</th><th scope="col" class="text-end">Amount</th><th scope="col">Status</th><th scope="col">Processing</th><th scope="col">Fraud outcome</th><th scope="col"><span class="visually-hidden">Details</span></th></tr></thead>
+        <tbody id="recent-transactions-body">
+        {% for t in recent_transactions %}
           <tr>
-            <td><div class="merchant-name">{{ p.beneficiary.name|default:p.merchant_code }}</div><div class="merchant-sub">{{ p.get_status_display }} · Simulator</div></td>
-            <td class="transaction-reference">{{ p.banking_transaction.transaction_reference|default:"—"|truncatechars:16 }}</td>
-            <td>{{ p.created_at|date:"d M Y · H:i" }}</td>
-            <td class="text-end amount-cell">{{ p.amount }} {{ p.currency }}</td>
-            <td><span class="status-pill {% if p.status == 'SUCCEEDED' %}status-succeeded{% elif p.status == 'FAILED' or p.status == 'REJECTED' %}status-failed{% elif p.status == 'HELD_FOR_REVIEW' %}status-held{% elif p.status == 'UNKNOWN' %}status-unknown{% endif %}">{{ p.get_status_display }}</span></td>
-            <td class="text-end"><a class="payment-view" href="{% url 'payments:detail' public_ref=p.public_ref %}">View <span aria-hidden="true">→</span></a></td>
+            <td><div class="merchant-name">{{ t.beneficiary.name|default:t.description }}</div><div class="merchant-sub">{{ t.get_transaction_type_display }}{% if t.channel == 'LEGACY_IMPORT' %} · Imported demo data{% else %} · Simulator{% endif %}</div></td>
+            <td class="transaction-reference">{{ t.transaction_reference|truncatechars:16 }}</td>
+            <td>{{ t.created_at|date:"d M Y · H:i" }}</td>
+            <td class="text-end amount-cell">{{ t.amount }} {{ t.currency }}</td>
+            <td><span class="status-pill {% if t.transaction_status == 'SUCCEEDED' %}status-succeeded{% elif t.transaction_status == 'FAILED' or t.transaction_status == 'REJECTED' %}status-failed{% elif t.transaction_status == 'HELD_FOR_REVIEW' or t.transaction_status == 'PENDING' %}status-held{% elif t.transaction_status == 'UNKNOWN' %}status-unknown{% endif %}">{{ t.get_transaction_status_display }}</span></td>
+            <td>{% if t.processing_time_ms != None %}{{ t.processing_time_ms }} ms{% elif not t.processed_at %}Processing{% else %}—{% endif %}</td>
+            <td>{% if t.payment and t.payment.fraud_decision %}{{ t.payment.fraud_decision }} · {{ t.payment.fraud_score }}/100{% else %}Not recorded{% endif %}</td>
+            <td class="text-end">{% if t.payment_id %}<a class="payment-view" href="{% url 'payments:detail' public_ref=t.payment.public_ref %}">View <span aria-hidden="true">→</span></a>{% else %}<span class="merchant-sub">Activity</span>{% endif %}</td>
           </tr>
         {% empty %}
-          <tr><td class="empty-state" colspan="6">No transactions yet. Your activity will appear here after you make a simulated payment.</td></tr>
+          <tr><td class="empty-state" colspan="8">No transactions yet. Your activity will appear here after you make a simulated payment.</td></tr>
         {% endfor %}
         </tbody>
       </table>
     </div>
+    </div>
   </div>
 </section>
+<script>
+  (() => {
+    const monitor = document.getElementById("transaction-monitor");
+    const state = document.getElementById("transaction-monitor-state");
+    const body = document.getElementById("recent-transactions-body");
+    const pollInterval = Number(monitor.dataset.pollInterval);
+    let refreshing = false;
+
+    const cell = (row, text, className = "") => {
+      const element = document.createElement("td");
+      element.textContent = text;
+      if (className) element.className = className;
+      row.appendChild(element);
+      return element;
+    };
+
+    const formatTime = (value) => new Intl.DateTimeFormat("en-IN", {
+      dateStyle: "medium",
+      timeStyle: "short",
+      timeZone: "Asia/Kolkata"
+    }).format(new Date(value));
+
+    const renderTransactions = (transactions) => {
+      body.replaceChildren();
+      if (!transactions.length) {
+        const row = document.createElement("tr");
+        const empty = cell(row, "No transactions yet. Your activity will appear here after you make a simulated payment.");
+        empty.colSpan = 8;
+        empty.className = "empty-state";
+        body.appendChild(row);
+        return;
+      }
+
+      transactions.forEach((item) => {
+        const row = document.createElement("tr");
+        const activity = document.createElement("td");
+        const name = document.createElement("div");
+        name.className = "merchant-name";
+        name.textContent = item.description || item.transaction_type;
+        const source = document.createElement("div");
+        source.className = "merchant-sub";
+        source.textContent = `${item.transaction_type} · ${item.channel === "LEGACY_IMPORT" ? "Imported demo data" : "Simulator"}`;
+        activity.append(name, source);
+        row.appendChild(activity);
+        cell(row, item.reference.slice(0, 13) + "…", "transaction-reference");
+        cell(row, formatTime(item.created_at));
+        cell(row, `${item.amount} ${item.currency}`, "text-end amount-cell");
+
+        const statusCell = document.createElement("td");
+        const status = document.createElement("span");
+        status.className = "status-pill";
+        if (item.status === "SUCCEEDED") status.classList.add("status-succeeded");
+        else if (["FAILED", "REJECTED"].includes(item.status)) status.classList.add("status-failed");
+        else if (["HELD_FOR_REVIEW", "PENDING"].includes(item.status)) status.classList.add("status-held");
+        else if (item.status === "UNKNOWN") status.classList.add("status-unknown");
+        status.textContent = item.status_display;
+        statusCell.appendChild(status);
+        row.appendChild(statusCell);
+
+        cell(row, item.processing_time_ms !== null
+          ? `${item.processing_time_ms} ms`
+          : item.processed_at ? "—" : "Processing");
+        cell(row, item.fraud_decision
+          ? `${item.fraud_decision} · ${item.fraud_score}/100`
+          : "Not recorded");
+        const details = document.createElement("td");
+        details.className = "text-end";
+        if (item.detail_url) {
+          const link = document.createElement("a");
+          link.className = "payment-view";
+          link.href = item.detail_url;
+          link.textContent = "View →";
+          details.appendChild(link);
+        } else {
+          details.textContent = "Activity";
+          details.className += " merchant-sub";
+        }
+        row.appendChild(details);
+        body.appendChild(row);
+      });
+    };
+
+    const refresh = async () => {
+      if (refreshing) return;
+      refreshing = true;
+      state.textContent = "Refreshing transactions…";
+      try {
+        const response = await fetch(monitor.dataset.url, {
+          headers: { "Accept": "application/json" },
+          credentials: "same-origin",
+          cache: "no-store"
+        });
+        if (!response.ok) throw new Error(`Request failed (${response.status})`);
+        const payload = await response.json();
+        if (!Array.isArray(payload.results)) throw new Error("Unexpected response format");
+        renderTransactions(payload.results);
+        state.textContent = `Live updates · refreshed ${formatTime(new Date().toISOString())}`;
+      } catch (error) {
+        state.textContent = "Unable to refresh transactions. Showing last available results; retrying.";
+      } finally {
+        refreshing = false;
+      }
+    };
+
+    refresh();
+    window.setInterval(refresh, pollInterval);
+  })();
+</script>
 {% endblock %}

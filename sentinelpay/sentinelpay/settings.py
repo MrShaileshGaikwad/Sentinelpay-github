@@ -60,7 +60,8 @@ TEMPLATES = [
 
 WSGI_APPLICATION = "sentinelpay.wsgi.application"
 
-if os.environ.get("DB_ENGINE", "sqlite").lower() == "mysql":
+DB_ENGINE = os.environ.get("DB_ENGINE", "sqlite").strip().lower()
+if DB_ENGINE == "mysql":
     db_password = os.environ.get("DB_PASSWORD", "")
     if not db_password or db_password == "replace-with-db-password":
         raise ImproperlyConfigured(
@@ -79,13 +80,17 @@ if os.environ.get("DB_ENGINE", "sqlite").lower() == "mysql":
             },
         }
     }
-else:
+elif DB_ENGINE == "sqlite":
     DATABASES = {
         "default": {
             "ENGINE": "django.db.backends.sqlite3",
             "NAME": BASE_DIR / "db.sqlite3",
         }
     }
+else:
+    raise ImproperlyConfigured(
+        "Unsupported DB_ENGINE. Choose 'sqlite' or 'mysql'."
+    )
 
 AUTH_PASSWORD_VALIDATORS = [
     {"NAME": "django.contrib.auth.password_validation.UserAttributeSimilarityValidator"},
@@ -106,6 +111,18 @@ DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 LOGIN_URL = "login"
 LOGIN_REDIRECT_URL = "dashboard"
 LOGOUT_REDIRECT_URL = "login"
+try:
+    TRANSACTION_MONITOR_POLL_INTERVAL_MS = int(
+        os.environ.get("TRANSACTION_MONITOR_POLL_INTERVAL_MS", "5000")
+    )
+except ValueError as exc:
+    raise ImproperlyConfigured(
+        "TRANSACTION_MONITOR_POLL_INTERVAL_MS must be a positive integer."
+    ) from exc
+if TRANSACTION_MONITOR_POLL_INTERVAL_MS <= 0:
+    raise ImproperlyConfigured(
+        "TRANSACTION_MONITOR_POLL_INTERVAL_MS must be a positive integer."
+    )
 
 # Cookie and header hardening applies whenever DEBUG is off.
 SESSION_COOKIE_HTTPONLY = True

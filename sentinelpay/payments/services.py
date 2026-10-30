@@ -9,10 +9,11 @@ Money: a debit is posted only when the simulator reports SUCCESS. TIMEOUT
 leaves the payment UNKNOWN with no debit, and the system never retries it
 automatically.
 """
-import hashlib
-import json
 from datetime import timedelta
 from decimal import Decimal
+import hashlib
+import json
+from time import perf_counter_ns
 
 from django.db import IntegrityError, transaction
 from django.db.models import Avg, F, Q
@@ -112,7 +113,33 @@ def _record_stage(payment, customer, action, label):
     )
 
 
-def _process(*, customer, account_id, beneficiary_id, amount, merchant_code, idempotency_key, fingerprint, now):
+def _transition_payment(payment, transaction_record, new_status, customer):
+    previous_status = payment.status
+    transition(payment, new_status)
+    transaction_record.transaction_status = payment.status
+    transaction_record.save(update_fields=["transaction_status"])
+    record_event(
+        actor=customer,
+        action="TRANSACTION_STATUS_CHANGED",
+        object_type="Transaction",
+        object_id=transaction_record.pk,
+        correlation_id=payment.public_ref,
+        metadata={"from_status": previous_status, "to_status": payment.status},
+    )
+
+
+def _process(
+    *,
+    customer,
+    account_id,
+    beneficiary_id,
+    amount,
+    merchant_code,
+    idempotency_key,
+    fingerprint,
+    now,
+    started_at_ns,
+):
     account = BankAccount.objects.select_for_update().filter(
         pk=account_id, owner=customer
     ).first()
@@ -150,6 +177,28 @@ def _process(*, customer, account_id, beneficiary_id, amount, merchant_code, ide
         ],
         created_at=now,
     )
+    transaction_record = Transaction.objects.create(
+        payment=payment,
+        account=account,
+        beneficiary=beneficiary,
+        transaction_type=(
+            Transaction.Type.TRANSFER if beneficiary else Transaction.Type.PAYMENT
+        ),
+        description=beneficiary.name if beneficiary else merchant_code,
+        amount=payment.amount,
+        currency=payment.currency,
+        transaction_status=payment.status,
+        risk_score=evaluation.score,
+        created_at=payment.created_at,
+    )
+    record_event(
+        actor=customer,
+        action="TRANSACTION_CREATED",
+        object_type="Transaction",
+        object_id=transaction_record.pk,
+        correlation_id=payment.public_ref,
+        metadata={"transaction_type": transaction_record.transaction_type},
+    )
     _record_stage(payment, customer, "REQUEST_VALIDATED", "Request validated")
     _record_stage(payment, customer, "AUTHORIZATION_VERIFIED", "Account and beneficiary ownership verified")
     _record_stage(payment, customer, "BALANCE_CHECKED", "Available balance checked")
@@ -161,30 +210,42 @@ def _process(*, customer, account_id, beneficiary_id, amount, merchant_code, ide
         metadata={"score": evaluation.score, "decision": evaluation.decision,
                   "ruleset": evaluation.ruleset_version},
     )
+    record_event(
+        actor=customer,
+        action="FRAUD_DECISION_RECORDED",
+        object_type="Transaction",
+        object_id=transaction_record.pk,
+        correlation_id=payment.public_ref,
+        metadata={
+            "score": evaluation.score,
+            "decision": evaluation.decision,
+            "ruleset": evaluation.ruleset_version,
+        },
+    )
 
     if evaluation.decision == "DECLINE":
-        transition(payment, Status.REJECTED)
+        _transition_payment(payment, transaction_record, Status.REJECTED, customer)
     elif evaluation.decision in ("REVIEW", "STEP_UP"):
         # The step-up challenge flow is not built in this slice, so the payment is held without a debit.
-        transition(payment, Status.HELD_FOR_REVIEW)
+        _transition_payment(payment, transaction_record, Status.HELD_FOR_REVIEW, customer)
     else:
-        transition(payment, Status.SUBMITTED)
+        _transition_payment(payment, transaction_record, Status.SUBMITTED, customer)
         _record_stage(payment, customer, "PAYMENT_SUBMITTED", "Submitted to payment simulator")
         response = SimulatedGateway().submit(merchant_code, amount, reference=str(payment.public_ref))
         payment.gateway_code = response.code
         payment.save(update_fields=["gateway_code", "updated_at"])
         if response.outcome is GatewayOutcome.SUCCESS:
             if _post_debit(payment):
-                transition(payment, Status.SUCCEEDED)
+                _transition_payment(payment, transaction_record, Status.SUCCEEDED, customer)
             else:
                 # Simulator said success but the balance check failed at posting. Flagged for reconciliation.
                 payment.gateway_code = "SIM_POST_REJECTED"
                 payment.save(update_fields=["gateway_code", "updated_at"])
-                transition(payment, Status.FAILED)
+                _transition_payment(payment, transaction_record, Status.FAILED, customer)
         elif response.outcome is GatewayOutcome.TIMEOUT:
-            transition(payment, Status.UNKNOWN)
+            _transition_payment(payment, transaction_record, Status.UNKNOWN, customer)
         else:
-            transition(payment, Status.FAILED)
+            _transition_payment(payment, transaction_record, Status.FAILED, customer)
 
     if payment.status in (Status.HELD_FOR_REVIEW, Status.REJECTED):
         severity = (
@@ -202,23 +263,24 @@ def _process(*, customer, account_id, beneficiary_id, amount, merchant_code, ide
             metadata={"severity": severity, "payment_ref": str(payment.public_ref)},
         )
 
-    transaction_record = Transaction.objects.create(
-        payment=payment,
-        account=account,
-        beneficiary=beneficiary,
-        transaction_type=(
-            Transaction.Type.TRANSFER if beneficiary else Transaction.Type.PAYMENT
-        ),
-        amount=payment.amount,
-        currency=payment.currency,
-        transaction_status=payment.status,
-        risk_score=evaluation.score,
-        created_at=payment.created_at,
-        processed_at=(
-            payment.updated_at
-            if payment.status not in (Status.SUBMITTED, Status.UNKNOWN)
-            else None
-        ),
+    processed_at = timezone.now()
+    transaction_record.processed_at = processed_at
+    transaction_record.processing_time_ms = max(
+        0, (perf_counter_ns() - started_at_ns) // 1_000_000
+    )
+    transaction_record.save(
+        update_fields=["processed_at", "processing_time_ms"]
+    )
+    record_event(
+        actor=customer,
+        action="TRANSACTION_PROCESSING_COMPLETED",
+        object_type="Transaction",
+        object_id=transaction_record.pk,
+        correlation_id=payment.public_ref,
+        metadata={
+            "status": transaction_record.transaction_status,
+            "processing_time_ms": transaction_record.processing_time_ms,
+        },
     )
     record_event(
         actor=customer, action=f"PAYMENT_{payment.status}", object_type="Payment", object_id=payment.pk,
@@ -246,11 +308,13 @@ def create_payment(*, customer, account_id, beneficiary_id, amount, merchant_cod
         return existing
 
     try:
+        started_at_ns = perf_counter_ns()
         with transaction.atomic():
             return _process(
                 customer=customer, account_id=account_id, beneficiary_id=beneficiary_id,
                 amount=amount, merchant_code=merchant_code,
                 idempotency_key=idempotency_key, fingerprint=fingerprint, now=now,
+                started_at_ns=started_at_ns,
             )
     except IntegrityError:
         # A concurrent request with the same key won the race. Return its result or report a conflict.

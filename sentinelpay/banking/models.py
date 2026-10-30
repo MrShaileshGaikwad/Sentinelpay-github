@@ -155,6 +155,7 @@ class Beneficiary(models.Model):
     name = models.CharField(max_length=150, db_column="beneficiary_name")
     destination_ref = models.CharField(max_length=34, db_column="beneficiary_account")
     bank_code = models.CharField(max_length=20, blank=True)
+    bank_name = models.CharField(max_length=100, blank=True)
     nickname = models.CharField(max_length=50, blank=True)
     verification_status = models.CharField(
         max_length=20,
@@ -172,9 +173,12 @@ class Transaction(models.Model):
     class Type(models.TextChoices):
         TRANSFER = "TRANSFER", "Transfer"
         PAYMENT = "PAYMENT", "Payment"
+        DEPOSIT = "DEPOSIT", "Deposit"
+        WITHDRAWAL = "WITHDRAWAL", "Withdrawal"
 
     class Status(models.TextChoices):
         INITIATED = "INITIATED", "Initiated"
+        PENDING = "PENDING", "Pending"
         HELD_FOR_REVIEW = "HELD_FOR_REVIEW", "Held for review"
         REJECTED = "REJECTED", "Rejected by fraud policy"
         SUBMITTED = "SUBMITTED", "Submitted"
@@ -184,7 +188,11 @@ class Transaction(models.Model):
 
     transaction_reference = models.UUIDField(default=uuid4, unique=True, editable=False)
     payment = models.OneToOneField(
-        "payments.Payment", on_delete=models.PROTECT, related_name="banking_transaction"
+        "payments.Payment",
+        on_delete=models.PROTECT,
+        related_name="banking_transaction",
+        null=True,
+        blank=True,
     )
     account = models.ForeignKey(
         BankAccount, on_delete=models.PROTECT, related_name="transactions"
@@ -197,6 +205,7 @@ class Transaction(models.Model):
         related_name="transactions",
     )
     transaction_type = models.CharField(max_length=30, choices=Type.choices)
+    description = models.CharField(max_length=150, blank=True)
     amount = models.DecimalField(max_digits=18, decimal_places=2)
     currency = models.CharField(max_length=3)
     transaction_status = models.CharField(max_length=20, choices=Status.choices)
@@ -208,6 +217,7 @@ class Transaction(models.Model):
     )
     created_at = models.DateTimeField(default=timezone.now)
     processed_at = models.DateTimeField(null=True, blank=True)
+    processing_time_ms = models.PositiveBigIntegerField(null=True, blank=True)
 
     class Meta:
         db_table = "banking_transaction"

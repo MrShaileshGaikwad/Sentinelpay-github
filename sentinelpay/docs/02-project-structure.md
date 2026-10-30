@@ -61,11 +61,12 @@ The distribution ZIP intentionally excludes `db.sqlite3`, Git metadata, virtual 
 | --- | --- |
 | `manage.py` | Django command-line entry point for checks, migrations, seeding, and the development server. |
 | `sentinelpay/settings.py` | Installed apps, middleware, templates, static files, authentication, environment variables, and database selection. SQLite is the default; optional MySQL requires environment configuration. |
-| `sentinelpay/urls.py` | Root route table: admin, registration, login, logout, overview, and the payments URL include. |
+| `sentinelpay/test_settings.py` | Keeps automated tests isolated on SQLite, even when the local application `.env` selects MySQL. |
+| `sentinelpay/urls.py` | Root route table: admin, registration, login, logout, overview, authenticated recent-transaction API, and the payments URL include. |
 | `sentinelpay/wsgi.py` | WSGI entry point for compatible application servers. |
-| `requirements.txt` | Pinned Django and pytest dependencies; MySQL client is optional. |
+| `requirements.txt` | Pinned Django, pytest, and `.env` loader dependencies; MySQL client is optional. |
 | `pytest.ini`, `conftest.py` | Pytest/Django settings and shared customer, account, and beneficiary fixtures. |
-| `.env.example` | Placeholder configuration examples; it is not automatically loaded by Django. |
+| `.env.example` | Placeholder configuration; copy to the ignored `.env` file and fill in local settings. |
 | `.gitignore` | Excludes `.env`, SQLite database, virtual environments, Python cache files, and pytest cache. |
 | `README.md` | Project overview, demonstration rules, setup steps, test commands, and limitations. |
 
@@ -76,11 +77,13 @@ The distribution ZIP intentionally excludes `db.sqlite3`, Git metadata, virtual 
 Models the financial data used by the sample. `Customer` links one-to-one with a Django user and stores user-provided profile fields plus explicit KYC/risk placeholders. `BankAccount` stores a synthetic account number, type, status, currency, available balance, and ledger balance. `Beneficiary` can be customer-owned or project-wide, and `Transaction` records each payment's account, optional recipient, simulator status, risk score, and timestamps.
 
 - `forms.py`: customer profile form validates date of birth and normalizes Indian mobile numbers. KYC and risk values are intentionally excluded from customer-editable fields.
-- `models.py`: shared banking entities used by payment validation and the dashboard.
-- `views.py`: customer overview and profile editing. Customer accounts/payments are scoped to the authenticated user; the profile view updates only that user's profile and corresponding Django user name/email.
+- `models.py`: shared banking entities used by payment validation and the dashboard. `Transaction.processing_time_ms` remains nullable for preserved historical rows whose elapsed duration cannot be reconstructed.
+- `views.py`: customer overview, profile editing, customer-scoped transaction history, and an authenticated recent-transactions JSON API. Customer account/transaction querysets are scoped to the authenticated user; the profile view updates only that user's profile and corresponding Django user name/email.
 - `permissions.py`: single permission rule for fraud reviewers (staff, superuser, or membership in `Fraud Analysts`). Keeping this logic centralized makes nav visibility and view authorization consistent.
 - `context_processors.py`: exposes the reviewer permission to templates for conditional navigation. This is for display only; protected views check permission on the server too.
 - `management/commands/seed_demo.py`: creates synthetic demo users, customer profiles, savings accounts, and a shared sample beneficiary using an environment-supplied password. It does not reset existing records.
+- `management/commands/prepare_mybank.py` and `import_mybank_legacy.py`: after a verified backup, archive conflicting MyBank Django-like tables and idempotently import the original customer, account, beneficiary, and transaction rows. Imported customer users start without usable passwords; imported transactions do not reconcile balances.
+- The payment service creates its linked `Transaction` at initiation, updates its status alongside the existing payment state machine, and stores a timezone-aware completion time and monotonic elapsed duration when the processing outcome is known. Append-only audit events capture transaction creation, status transitions, fraud decisions, and processing completion without credentials or account payloads.
 - `migrations/`: database schema history. The profile/transaction migration backfills profile names/emails from existing Django users and one transaction per existing payment; account ledger balance begins at the existing balance as a cutover snapshot, not a reconstruction of history. Review and apply migrations deliberately; do not delete or replace migrations to repair a database.
 
 ### `payments/`

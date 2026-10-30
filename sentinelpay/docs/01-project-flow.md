@@ -84,11 +84,11 @@ The backend enforces the result before submission:
 | `SIM-TIMEOUT` | `UNKNOWN` | No debit; no automatic retry or reconciliation workflow. |
 | `SIM-ERROR` | `FAILED` | No debit. |
 
-All status changes use the state transition function in `payments/states.py`. In the same database transaction, the service creates a `banking_transaction` record tied to the payment, account, and optional beneficiary. Its status and risk score copy the actual persisted payment result. A successful simulator result decrements both available and ledger balances and creates the existing ledger debit; non-success outcomes do not change either balance. A timeout remains unresolved with no processed timestamp or debit.
+All status changes use the state transition function in `payments/states.py`. In the same database transaction, the service creates a `banking_transaction` record tied to the payment, account, and optional beneficiary. Its status and risk score copy the actual persisted payment result. A successful simulator result decrements both available and ledger balances and creates the existing ledger debit; non-success outcomes do not change either balance. A timeout remains an unresolved gateway outcome with no debit; the local processing attempt still records its completion timestamp and elapsed duration.
 
 ### 9. View the result
 
-After processing, the browser is redirected to the payment receipt identified by a unique public reference. The receipt is scoped to the signed-in customer and displays the persisted payment status and transaction reference, amount, account, recipient, fraud score and decision, triggered rules, recorded audit timeline, and any ledger entry. The dashboard and transaction history show the same persisted transaction reference and result.
+After processing, the browser is redirected to the payment receipt identified by a unique public reference. The receipt is scoped to the signed-in customer and displays the persisted payment status and transaction reference, amount, account, recipient, fraud score and decision, triggered rules, recorded audit timeline, and any ledger entry. The dashboard and transaction history show the same persisted transaction reference and result. The dashboard requests the latest transaction rows from `/api/transactions/recent/` every 5 seconds by default; `TRANSACTION_MONITOR_POLL_INTERVAL_MS` configures the interval. An API error leaves the last rendered rows visible and reports that refresh failed.
 
 The timeline is read from stored audit events. Its animation is a presentation effect; it does not imply that the transaction is still processing. The risk meter uses the stored score rather than inventing a new value.
 
@@ -107,12 +107,17 @@ The shared navigation submits a CSRF-protected POST to `/logout/`. Django's buil
 - SQLite is the default database, stored at the project root as `db.sqlite3`.
 - Setting `DB_ENGINE=mysql` switches settings to the configured MySQL environment variables. The optional `.env` file is loaded for local configuration.
 - Credentials and settings are read from process environment variables or the git-ignored `.env` file. `.env.example` contains placeholders only.
+- Setting `DB_ENGINE=mysql` and `DB_NAME=mybank` selects the configured MyBank database. Its local schema was inspected read-only; migrations and import have not yet been applied. The local `.env` file is loaded by Django and must contain a dedicated application user's credentials, not the MySQL root password.
+- Before applying Django migrations to MyBank, a verified backup is required and `prepare_mybank` archives conflicting manually-created `auth_*` and `django_*` tables without changing the four source banking tables.
+- `import_mybank_legacy` imports source customers, accounts, beneficiaries, and historical transactions into Django-managed records. Imported customer users have unusable passwords until an administrator provisions them; imported history does not recalculate account balances.
 - `python manage.py migrate` applies schema migrations. This document does not imply that a migration has already been applied to a particular local database.
 - The banking schema migration backfills customer profiles from names/emails already stored in Django users and transaction records from existing payments. It preserves the existing available balance and initializes ledger balance to that value as a cutover snapshot; it cannot reconstruct historical opening balances or ledger balances.
+- Payment processing creates a transaction row at initiation within the existing database transaction. The service records timezone-aware creation/completion timestamps and measures elapsed time with a monotonic timer. Status transitions and fraud decisions are append-only audit events correlated to the payment reference. Legacy records have no reconstructed processing duration.
+- The legacy MyBank `transactions` table links through `account_id`; customer ownership is resolved via its `accounts.customer_id`. Django's separate `banking_transaction.account_id` foreign key points at SentinelPay's bank account, whose owner is a Django user. The import process preserves the source relation and does not add a customer column to the MyBank table.
 
 ## Current flow limitations
 
 - Payments are simulated; no real payment network or provider is contacted.
-- There is no email verification, self-service password reset, customer control of KYC/risk classifications, live transaction feed, or external fraud API.
+- There is no email verification, self-service password reset, customer control of KYC/risk classifications, server-push transaction updates, or external fraud API. Dashboard live monitoring uses configurable polling.
 - Unknown gateway outcomes remain unresolved until a future reconciliation feature exists.
 - Payment limits, fees, step-up authentication, and customer-managed beneficiary creation are not implemented.

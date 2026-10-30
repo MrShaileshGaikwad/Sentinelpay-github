@@ -51,6 +51,10 @@ def test_successful_payment_debits_once_and_records_ledger(customer, account, ol
     assert transaction_record.transaction_type == Transaction.Type.TRANSFER
     assert transaction_record.amount == Decimal("500.00")
     assert transaction_record.beneficiary == old_beneficiary
+    assert transaction_record.processed_at is not None
+    assert timezone.is_aware(transaction_record.processed_at)
+    assert transaction_record.processing_time_ms is not None
+    assert transaction_record.processing_time_ms >= 0
 
 
 @pytest.mark.django_db
@@ -96,6 +100,10 @@ def test_gateway_decline_does_not_debit(customer, account, old_beneficiary):
     assert p.gateway_code == "SIM_DECLINED"
     assert balance(account) == Decimal("250000.00")
     assert not LedgerEntry.objects.filter(payment=p).exists()
+    transaction_record = Transaction.objects.get(payment=p)
+    assert transaction_record.processed_at is not None
+    assert transaction_record.processing_time_ms is not None
+    assert transaction_record.transaction_status == Transaction.Status.FAILED
 
 
 @pytest.mark.django_db
@@ -109,7 +117,8 @@ def test_gateway_timeout_is_unknown_not_success_and_retry_does_not_debit(custome
     assert balance(account) == Decimal("250000.00")
     transaction_record = Transaction.objects.get(payment=p)
     assert transaction_record.transaction_status == Transaction.Status.UNKNOWN
-    assert transaction_record.processed_at is None
+    assert transaction_record.processed_at is not None
+    assert transaction_record.processing_time_ms is not None
 
 
 @pytest.mark.django_db
@@ -242,8 +251,18 @@ def test_successful_payment_writes_audit_events_with_correlation_id(customer, ac
     p = pay(customer, account, old_beneficiary)
     events = AuditEvent.objects.filter(correlation_id=p.public_ref)
     actions = set(events.values_list("action", flat=True))
-    assert {"FRAUD_EVALUATED", "PAYMENT_SUCCEEDED"} <= actions
+    assert {
+        "FRAUD_EVALUATED",
+        "FRAUD_DECISION_RECORDED",
+        "TRANSACTION_CREATED",
+        "TRANSACTION_STATUS_CHANGED",
+        "TRANSACTION_PROCESSING_COMPLETED",
+        "PAYMENT_SUCCEEDED",
+    } <= actions
     assert {"REQUEST_VALIDATED", "AUTHORIZATION_VERIFIED", "BALANCE_CHECKED", "IDEMPOTENCY_CHECKED"} <= actions
+    lifecycle_events = events.filter(object_type="Transaction")
+    for event in lifecycle_events:
+        assert not {"password", "token", "account_number"} & event.metadata.keys()
 
 
 @pytest.mark.django_db
@@ -253,6 +272,23 @@ def test_audit_rows_cannot_be_updated(customer, account, old_beneficiary):
     event.action = "TAMPERED"
     with pytest.raises(RuntimeError):
         event.save()
+
+
+@pytest.mark.django_db
+def test_processing_duration_uses_monotonic_timer(customer, account, old_beneficiary, monkeypatch):
+    ticks = iter((1_000_000_000, 1_017_000_000))
+    monkeypatch.setattr("payments.services.perf_counter_ns", lambda: next(ticks))
+
+    payment = pay(customer, account, old_beneficiary, key="monotonic-duration")
+
+    record = Transaction.objects.get(payment=payment)
+    assert record.processing_time_ms == 17
+    completion = AuditEvent.objects.get(
+        object_type="Transaction",
+        object_id=str(record.pk),
+        action="TRANSACTION_PROCESSING_COMPLETED",
+    )
+    assert completion.metadata["processing_time_ms"] == 17
 
 
 # ----- HTTP layer -----
@@ -355,6 +391,100 @@ def test_transaction_history_requires_login_and_only_shows_customer_payments(
     assert response.status_code == 200
     assert b"SIM-GROCERY" in response.content
     assert b"SIM-ERROR" not in response.content
+
+
+@pytest.mark.django_db
+def test_transaction_history_shows_imported_records_only_for_the_owner(
+    client, customer, other_customer, account
+):
+    Transaction.objects.create(
+        account=account,
+        transaction_type=Transaction.Type.DEPOSIT,
+        description="Imported MyBank deposit",
+        amount=Decimal("1200.00"),
+        currency="INR",
+        transaction_status=Transaction.Status.SUCCEEDED,
+        channel="LEGACY_IMPORT",
+    )
+    other_account = BankAccount.objects.create(
+        owner=other_customer, account_ref="T-OTHER", balance=Decimal("1000.00")
+    )
+    Transaction.objects.create(
+        account=other_account,
+        transaction_type=Transaction.Type.WITHDRAWAL,
+        description="Private imported withdrawal",
+        amount=Decimal("100.00"),
+        currency="INR",
+        transaction_status=Transaction.Status.FAILED,
+        channel="LEGACY_IMPORT",
+    )
+
+    response = client.get(reverse("transaction-history"))
+    assert response.status_code == 302
+    assert "/login/" in response["Location"]
+
+    client.force_login(customer)
+    response = client.get(reverse("transaction-history"))
+
+    assert response.status_code == 200
+    assert b"Imported MyBank deposit" in response.content
+    assert b"Imported demonstration record" in response.content
+    assert b"Private imported withdrawal" not in response.content
+
+
+@pytest.mark.django_db
+def test_recent_transaction_api_requires_authentication_and_scopes_results(
+    client, customer, other_customer, account
+):
+    own_payment = pay(customer, account, key="api-own")
+    other_account = BankAccount.objects.create(
+        owner=other_customer, account_ref="T-API-OTHER", balance=Decimal("1000.00")
+    )
+    other_payment = pay(
+        other_customer, other_account, merchant="SIM-ERROR", key="api-other"
+    )
+
+    response = client.get(reverse("recent-transactions-api"))
+    assert response.status_code == 401
+    assert response.json() == {"detail": "Authentication required."}
+
+    client.force_login(customer)
+    response = client.get(reverse("recent-transactions-api"))
+
+    assert response.status_code == 200
+    assert response["Cache-Control"] == "max-age=0, no-cache, no-store, must-revalidate, private"
+    results = response.json()["results"]
+    assert len(results) == 1
+    assert results[0]["status"] == Transaction.Status.SUCCEEDED
+    assert results[0]["processing_time_ms"] is not None
+    assert results[0]["created_at"]
+    assert results[0]["processed_at"]
+    assert results[0]["fraud_decision"] == own_payment.fraud_decision
+    assert str(other_payment.banking_transaction.transaction_reference) not in {
+        item["reference"] for item in results
+    }
+
+
+@pytest.mark.django_db
+def test_recent_transaction_api_rejects_non_get_methods(client, customer):
+    client.force_login(customer)
+
+    response = client.post(reverse("recent-transactions-api"))
+
+    assert response.status_code == 405
+
+
+@pytest.mark.django_db
+def test_dashboard_exposes_live_monitor_fields_and_poll_interval(client, customer):
+    client.force_login(customer)
+
+    response = client.get(reverse("dashboard"))
+
+    assert response.status_code == 200
+    assert response.context["transaction_poll_interval_ms"] == 5000
+    assert b"Processing" in response.content
+    assert b"Fraud outcome" in response.content
+    assert b"/api/transactions/recent/" in response.content
 
 
 @pytest.mark.django_db

@@ -19,9 +19,10 @@ This SRS records the current functional and non-functional requirements for Sent
 
 ### 1.2 Scope
 
-SentinelPay demonstrates customer sign-in and profile editing, synthetic Indian-banking-style account viewing, payment creation and review, deterministic fraud screening, simulated payment outcomes, persistent transaction records, ledger-backed debits, transaction history, CSV statements, fraud case review, and append-only audit events.
+SentinelPay demonstrates customer sign-in and profile editing, synthetic Indian-banking-style account viewing, payment creation and review, deterministic fraud screening, simulated payment outcomes, persistent transaction records with lifecycle timestamps and measured processing durations, ledger-backed debits, transaction history, a customer-scoped recent-transactions API and polling dashboard, CSV statements, fraud case review, and append-only audit events.
 
 The product is not a production banking system. It does not connect to financial institutions, move real funds, or provide regulated financial services. Profile fields are customer-provided; KYC and risk statuses are placeholders, not verified results. The default database is SQLite; optional MySQL configuration is supported and tested locally.
+The controlled MyBank import workflow preserves its legacy banking tables and imports demonstration records after incompatible system tables are archived. The live schema-preparation/import procedure must be backed up and verified on the target machine.
 
 ### 1.3 Definitions
 
@@ -71,6 +72,7 @@ SentinelPay is a single Django web application. Django handles sessions, forms, 
 - Python and Django versions are pinned in `requirements.txt`.
 - Supported project setup is documented for Windows PowerShell.
 - SQLite is selected unless `DB_ENGINE=mysql` is explicitly set.
+- The active inspected workspace configuration uses the project SQLite database. MyBank is not assumed to be the configured runtime database.
 - The application is served using Django's WSGI interface or development server.
 - A modern browser with HTML form, cookie, and CSS support is required.
 - There is no external browser JavaScript dependency for the documented core workflows.
@@ -243,14 +245,20 @@ Priority definitions: **Must** is required for the current demonstrated behavior
 | User | Django authentication identity; owns accounts, private beneficiaries, and payments; may have reviewer group/staff permissions. |
 | Customer | One-to-one with a user; synthetic customer number, first/last name, email, mobile, optional DOB/address, KYC status, risk level, active status, and timestamps. Personal details are not fabricated; default KYC/risk states are not provided/not assessed. |
 | BankAccount | Owned by one user; synthetic account number, type, INR currency, available and ledger balances, active/frozen/closed status, optional opening time, and creation time. |
-| Beneficiary | May be owned by one user or have no owner for project-wide scope; name, account reference, optional bank code/nickname, verification and active statuses, creation time. |
+| Beneficiary | May be owned by one user or have no owner for project-wide scope; name, account reference, optional bank name/bank code/nickname, verification and active statuses, creation time. |
 | Payment | Belongs to customer and source account; may link a beneficiary; stores amount/currency, route, idempotency data, status, fraud outcome, gateway outcome, timestamps. |
-| Transaction | One-to-one with a payment; links source account and optional beneficiary; stores unique transaction reference, type, amount/currency, recorded outcome, channel, optional device/IP, risk score, and timestamps. |
+| Transaction | May link to a payment; links a source account and optional beneficiary; stores unique transaction reference, type, description, amount/currency, recorded outcome, channel, optional device/IP, risk score, creation/completion timestamps, and nullable processing duration in milliseconds. Imported historical rows have no payment link and are explicitly labelled; missing elapsed duration remains null. |
 | LedgerEntry | Links one account and payment to a nonzero signed amount; payment debit is negative. |
 | FraudCase | One-to-one with a held or rejected payment; stores status, severity, reviewer, and timestamps. |
 | AuditEvent | Optional actor; action, object/correlation references, metadata, timestamp; append-only. |
 
-Database schema is evolved through the migrations in the respective app directories. The profile/transaction migration backfills existing user names/emails and payment outcomes. The initial ledger balance is the account balance at migration time; this is a cutover snapshot, not a historically reconstructed ledger. The source distribution omits local SQLite data to avoid exposing machine-specific records.
+Database schema is evolved through the migrations in the respective app directories. The profile/transaction migration backfills existing user names/emails and payment outcomes. MyBank preparation renames only incompatible manually-created Django system tables after backup; the legacy banking tables remain available to the repeat-safe importer. Imported balances are cutover snapshots, and historical transactions do not recalculate them. Imported customer users have no usable password until an administrator provisions one. The source distribution omits local database data and `.env` credentials.
+
+### 5.2 Transaction monitoring and audit
+
+An authenticated `GET /api/transactions/recent/` response returns at most the latest 10 transactions for accounts owned by the caller, including creation/completion timestamps, processing duration, status, and the payment's fraud decision/score when available. The dashboard polls this endpoint every 5 seconds by default; `TRANSACTION_MONITOR_POLL_INTERVAL_MS` configures the interval. Transaction creation, status changes, fraud decisions, and processing completion are recorded through the existing append-only audit application. Audit metadata excludes passwords, tokens, full account identifiers, and unnecessary payment payloads.
+
+The imported MyBank `transactions` rows link to `accounts` through `account_id` and do not contain a direct customer key. The import resolves their owner through `accounts.customer_id` and the source `customers` table. The existing SQL tables are preserved; no extra relationship columns or duplicate transaction table are added to MyBank.
 
 ## 7. Key workflows and state behavior
 

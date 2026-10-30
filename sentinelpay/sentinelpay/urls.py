@@ -11,5 +11,11 @@ urlpatterns = [
     path("logout/", auth_views.LogoutView.as_view(), name="logout"),
     path("", banking_views.dashboard, name="dashboard"),
     path("profile/", banking_views.customer_profile, name="customer-profile"),
+    path("transactions/", banking_views.transaction_history, name="transaction-history"),
+    path(
+        "api/transactions/recent/",
+        banking_views.recent_transactions_api,
+        name="recent-transactions-api",
+    ),
     path("payments/", include("payments.urls")),
 ]

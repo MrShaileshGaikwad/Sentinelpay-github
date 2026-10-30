@@ -1,15 +1,21 @@
 from datetime import date, datetime, time
 from decimal import Decimal
+from django.conf import settings
 from django.contrib import messages
 from django.contrib.auth import login
 from django.contrib.auth.decorators import login_required
+from django.core.paginator import Paginator
 from django.db import transaction as db_transaction
 from django.db.models import Count, Q, Sum
+from django.http import JsonResponse
 from django.shortcuts import redirect, render
+from django.urls import reverse
 from django.utils import timezone
+from django.views.decorators.cache import never_cache
+from django.views.decorators.http import require_GET
 
 from .forms import CustomerProfileForm, CustomerRegistrationForm
-from .models import BankAccount, Customer, generate_account_ref
+from .models import BankAccount, Customer, Transaction, generate_account_ref
 from payments.models import Payment
 
 
@@ -107,6 +113,10 @@ def dashboard(request):
     context = {
         "customer_profile": profile,
         "accounts": request.user.accounts.all(),
+        "recent_transactions": Transaction.objects.filter(
+            account__owner=request.user
+        ).select_related("account", "beneficiary", "payment")[:10],
+        "transaction_poll_interval_ms": settings.TRANSACTION_MONITOR_POLL_INTERVAL_MS,
         "recent_payments": payments.select_related(
             "source_account", "banking_transaction"
         )[:10],
@@ -119,6 +129,62 @@ def dashboard(request):
         "monthly_activity": months,
     }
     return render(request, "banking/dashboard.html", context)
+
+
+@never_cache
+@require_GET
+def recent_transactions_api(request):
+    if not request.user.is_authenticated:
+        return JsonResponse({"detail": "Authentication required."}, status=401)
+
+    transactions = (
+        Transaction.objects.filter(account__owner=request.user)
+        .select_related("payment", "beneficiary")
+        .order_by("-created_at")[:10]
+    )
+    results = []
+    for item in transactions:
+        payment = item.payment
+        results.append(
+            {
+                "reference": str(item.transaction_reference),
+                "transaction_type": item.get_transaction_type_display(),
+                "description": item.beneficiary.name if item.beneficiary_id else item.description,
+                "amount": str(item.amount),
+                "currency": item.currency,
+                "status": item.transaction_status,
+                "status_display": item.get_transaction_status_display(),
+                "created_at": timezone.localtime(item.created_at).isoformat(),
+                "processed_at": (
+                    timezone.localtime(item.processed_at).isoformat()
+                    if item.processed_at
+                    else None
+                ),
+                "processing_time_ms": item.processing_time_ms,
+                "fraud_decision": payment.fraud_decision if payment else "",
+                "fraud_score": payment.fraud_score if payment else None,
+                "channel": item.channel,
+                "detail_url": (
+                    reverse("payments:detail", kwargs={"public_ref": payment.public_ref})
+                    if payment
+                    else None
+                ),
+            }
+        )
+    return JsonResponse({"results": results})
+
+
+@login_required
+def transaction_history(request):
+    transactions = Transaction.objects.filter(
+        account__owner=request.user
+    ).select_related("account", "beneficiary", "payment")
+    page_obj = Paginator(transactions, 25).get_page(request.GET.get("page"))
+    return render(
+        request,
+        "banking/transaction_history.html",
+        {"page_obj": page_obj},
+    )
 
 
 @login_required
