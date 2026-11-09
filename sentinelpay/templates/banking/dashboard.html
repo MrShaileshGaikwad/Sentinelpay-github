@@ -1,260 +1,1381 @@
 {% extends "base.html" %}
+
 {% block title %}Overview · SentinelPay{% endblock %}
+
 {% block content %}
-<header class="page-heading">
-  <div>
-    <p class="eyebrow">Customer banking</p>
-    <h1 class="page-title">Good to see you, {{ customer_profile.full_name|default:user.get_username }}.</h1>
-    <p class="page-subtitle">A clear view of your simulated account activity.</p>
-  </div>
-  <a class="btn btn-primary" href="{% url 'payments:new' %}">Make a payment <span aria-hidden="true">→</span></a>
+
+<!-- ========================================= -->
+<!-- DASHBOARD HERO -->
+<!-- ========================================= -->
+
+<header class="dashboard-hero">
+    <div class="dashboard-hero-content">
+        <div class="hero-copy">
+            <p class="eyebrow">
+                <span class="live-dot"></span>
+                CUSTOMER BANKING
+            </p>
+
+            <h1 class="dashboard-title">
+                Welcome back,
+                {{ customer_profile.full_name|default:user.get_username }}.
+            </h1>
+
+            <p class="dashboard-subtitle">
+                Monitor your accounts, payments and transaction activity from one secure workspace.
+            </p>
+        </div>
+
+        <div class="dashboard-hero-actions">
+            <a class="btn btn-primary hero-payment-btn" href="{% url 'payments:new' %}">
+                <span class="hero-action-icon">↗</span>
+                Make a payment
+            </a>
+        </div>
+    </div>
 </header>
 
-<section class="metric-grid" aria-label="Account activity summary">
-  <article class="metric-card">
-    <span class="metric-label">Accounts</span>
-    <strong class="metric-value">{{ accounts|length }}</strong>
-    <span class="metric-foot">Linked to your profile</span>
-  </article>
-  <article class="metric-card">
-    <span class="metric-label">Successful payments</span>
-    <strong class="metric-value">{{ successful_count }}</strong>
-    <span class="metric-foot">All-time completed</span>
-  </article>
-  <article class="metric-card">
-    <span class="metric-label">This month</span>
-    <strong class="metric-value">{{ monthly_spend|floatformat:2 }}</strong>
-    <span class="metric-foot">Successful spend · {{ monthly_payment_count }} payments</span>
-  </article>
-  <article class="metric-card">
-    <span class="metric-label">Needs attention</span>
-    <strong class="metric-value">{{ open_payment_count }}</strong>
-    <span class="metric-foot">Pending or under review</span>
-  </article>
+
+<!-- ========================================= -->
+<!-- SUMMARY METRICS -->
+<!-- ========================================= -->
+
+<section class="dashboard-metrics" aria-label="Account activity summary">
+
+    <article class="metric-card metric-card-accounts">
+        <div class="metric-card-icon">▣</div>
+
+        <div class="metric-card-content">
+            <span class="metric-label">Linked accounts</span>
+
+            <strong class="metric-value">
+                {{ accounts|length }}
+            </strong>
+
+            <span class="metric-foot">
+                Available in your workspace
+            </span>
+        </div>
+    </article>
+
+
+    <article class="metric-card metric-card-success">
+        <div class="metric-card-icon">✓</div>
+
+        <div class="metric-card-content">
+            <span class="metric-label">Successful payments</span>
+
+            <strong class="metric-value">
+                {{ successful_count }}
+            </strong>
+
+            <span class="metric-foot">
+                All-time completed transactions
+            </span>
+        </div>
+    </article>
+
+
+    <article class="metric-card metric-card-spend">
+        <div class="metric-card-icon">₹</div>
+
+        <div class="metric-card-content">
+            <span class="metric-label">This month's spend</span>
+
+            <strong class="metric-value">
+                ₹{{ monthly_spend|floatformat:2 }}
+            </strong>
+
+            <span class="metric-foot">
+                {{ monthly_payment_count }} successful payment{{ monthly_payment_count|pluralize }}
+            </span>
+        </div>
+    </article>
+
+
+    <article class="metric-card metric-card-attention">
+        <div class="metric-card-icon">!</div>
+
+        <div class="metric-card-content">
+            <span class="metric-label">Needs attention</span>
+
+            <strong class="metric-value">
+                {{ open_payment_count }}
+            </strong>
+
+            <span class="metric-foot">
+                Pending or under review
+            </span>
+        </div>
+    </article>
+
 </section>
 
-<section class="panel customer-profile-card" aria-labelledby="customer-profile-heading">
-  <div class="section-heading">
-    <div>
-      <h2 class="section-title" id="customer-profile-heading">Customer details</h2>
-      <p class="section-caption">Your personal profile for this simulated banking workspace</p>
+
+<!-- ========================================= -->
+<!-- CUSTOMER PROFILE -->
+<!-- ========================================= -->
+
+<section class="dashboard-section">
+
+    <div class="section-heading dashboard-section-heading">
+
+        <div>
+            <p class="section-kicker">PROFILE</p>
+
+            <h2 class="section-title">
+                Customer details
+            </h2>
+
+            <p class="section-caption">
+                Your personal profile information for this banking workspace.
+            </p>
+        </div>
+
+        <a class="btn-outline-soft profile-edit-button"
+           href="{% url 'customer-profile' %}">
+
+            Edit profile
+            <span aria-hidden="true">→</span>
+
+        </a>
+
     </div>
-    <a class="btn-outline-soft" href="{% url 'customer-profile' %}">Edit profile</a>
-  </div>
-  {% if not customer_profile.profile_complete %}
-    <p class="profile-notice">Some details have not been provided. Add your information to complete your profile; SentinelPay does not invent personal or KYC details.</p>
-  {% endif %}
-  <dl class="customer-details-grid">
-    <div><dt>Customer number</dt><dd>{{ customer_profile.customer_number }}</dd></div>
-    <div><dt>Full name</dt><dd>{{ customer_profile.full_name|default:"Not provided" }}</dd></div>
-    <div><dt>Email address</dt><dd>{{ customer_profile.email|default:"Not provided" }}</dd></div>
-    <div><dt>Registered mobile</dt><dd>{{ customer_profile.phone_number|default:"Not provided" }}</dd></div>
-    <div><dt>Date of birth</dt><dd>{% if customer_profile.date_of_birth %}{{ customer_profile.date_of_birth|date:"d M Y" }}{% else %}Not provided{% endif %}</dd></div>
-    <div><dt>Address</dt><dd>{{ customer_profile.address|default:"Not provided"|linebreaksbr }}</dd></div>
-    <div><dt>KYC status</dt><dd>{{ customer_profile.get_kyc_status_display }}</dd></div>
-    <div><dt>Customer risk level</dt><dd>{{ customer_profile.get_risk_level_display }}</dd></div>
-  </dl>
+
+
+    <div class="panel customer-profile-card">
+
+        {% if not customer_profile.profile_complete %}
+
+        <div class="profile-notice">
+
+            <div class="profile-notice-icon">i</div>
+
+            <div>
+                <strong>Complete your profile</strong>
+
+                <p>
+                    Some personal details are still missing. You can update your profile at any time.
+                </p>
+            </div>
+
+        </div>
+
+        {% endif %}
+
+
+        <div class="customer-profile-layout">
+
+            <!-- CUSTOMER IDENTITY -->
+
+            <div class="customer-identity-card">
+
+                <div class="customer-avatar-large">
+
+                    {{ customer_profile.full_name|default:user.get_username|slice:":1"|upper }}
+
+                </div>
+
+                <div class="customer-identity-text">
+
+                    <span class="customer-number-label">
+                        CUSTOMER
+                    </span>
+
+                    <strong class="customer-name">
+
+                        {{ customer_profile.full_name|default:"Not provided" }}
+
+                    </strong>
+
+                    <span class="customer-number">
+
+                        {{ customer_profile.customer_number }}
+
+                    </span>
+
+                </div>
+
+            </div>
+
+
+            <!-- CUSTOMER DETAILS -->
+
+            <dl class="customer-details-grid">
+
+                <div class="customer-detail-item">
+                    <dt>Email address</dt>
+
+                    <dd>
+                        {{ customer_profile.email|default:"Not provided" }}
+                    </dd>
+                </div>
+
+
+                <div class="customer-detail-item">
+                    <dt>Registered mobile</dt>
+
+                    <dd>
+                        {{ customer_profile.phone_number|default:"Not provided" }}
+                    </dd>
+                </div>
+
+
+                <div class="customer-detail-item">
+                    <dt>Date of birth</dt>
+
+                    <dd>
+                        {% if customer_profile.date_of_birth %}
+                            {{ customer_profile.date_of_birth|date:"d M Y" }}
+                        {% else %}
+                            Not provided
+                        {% endif %}
+                    </dd>
+                </div>
+
+
+                <div class="customer-detail-item">
+                    <dt>Address</dt>
+
+                    <dd>
+                        {{ customer_profile.address|default:"Not provided" }}
+                    </dd>
+                </div>
+
+
+                <div class="customer-detail-item">
+                    <dt>KYC status</dt>
+
+                    <dd>
+                        <span class="detail-status">
+                            {{ customer_profile.get_kyc_status_display }}
+                        </span>
+                    </dd>
+                </div>
+
+
+                <div class="customer-detail-item">
+                    <dt>Customer risk level</dt>
+
+                    <dd>
+                        <span class="detail-status">
+                            {{ customer_profile.get_risk_level_display }}
+                        </span>
+                    </dd>
+                </div>
+
+            </dl>
+
+        </div>
+
+    </div>
+
 </section>
 
-<section class="account-grid" aria-labelledby="accounts-heading">
-  <div class="section-heading">
-    <div>
-      <h2 class="section-title" id="accounts-heading">Your accounts</h2>
-      <p class="section-caption">Balances across your linked accounts</p>
+
+<!-- ========================================= -->
+<!-- ACCOUNTS -->
+<!-- ========================================= -->
+
+<section class="dashboard-section account-section"
+         aria-labelledby="accounts-heading">
+
+    <div class="section-heading dashboard-section-heading">
+
+        <div>
+
+            <p class="section-kicker">
+                BANKING
+            </p>
+
+            <h2 class="section-title"
+                id="accounts-heading">
+
+                Your accounts
+
+            </h2>
+
+            <p class="section-caption">
+
+                Current balances across your linked accounts.
+
+            </p>
+
+        </div>
+
     </div>
-  </div>
-  <div class="row g-3">
-    {% for account in accounts %}
-      <div class="col-12 col-md-6 col-lg-4">
-        <article class="account-card">
-          <div class="account-card-top">
-            <span class="account-label">{{ account.get_account_type_display }}</span>
-            <span class="account-chip" aria-hidden="true"></span>
-          </div>
-          <p class="account-balance">{{ account.balance|floatformat:2 }}</p>
-          <span class="account-currency">{{ account.currency }} · Available balance</span>
-          <p class="account-ref mb-0">Account · {{ account.masked_ref }}</p>
-          <p class="account-ref mb-0">Ledger balance · {{ account.currency }} {{ account.ledger_balance|floatformat:2 }}</p>
-          <p class="account-ref mb-0">Status · {{ account.get_account_status_display }}</p>
-          <p class="account-ref mb-0">Opened · {% if account.opened_at %}{{ account.opened_at|date:"d M Y" }}{% else %}Not on file{% endif %}</p>
+
+
+    <div class="accounts-dashboard-grid">
+
+        {% for account in accounts %}
+
+        <article class="account-card account-card-modern">
+
+            <div class="account-card-header">
+
+                <div>
+
+                    <span class="account-label">
+
+                        {{ account.get_account_type_display }}
+
+                    </span>
+
+                    <span class="account-status">
+
+                        <span class="account-status-dot"></span>
+
+                        {{ account.get_account_status_display }}
+
+                    </span>
+
+                </div>
+
+
+                <div class="account-chip"
+                     aria-hidden="true">
+
+                    <span></span>
+                    <span></span>
+
+                </div>
+
+            </div>
+
+
+            <div class="account-balance-block">
+
+                <span class="account-balance-label">
+
+                    Available balance
+
+                </span>
+
+
+                <strong class="account-balance">
+
+                    {{ account.currency }}
+                    {{ account.balance|floatformat:2 }}
+
+                </strong>
+
+            </div>
+
+
+            <div class="account-number-block">
+
+                <span class="account-number-label">
+
+                    ACCOUNT NUMBER
+
+                </span>
+
+
+                <strong class="account-ref">
+
+                    {{ account.masked_ref }}
+
+                </strong>
+
+            </div>
+
+
+            <div class="account-card-footer">
+
+                <div>
+
+                    <span>Ledger balance</span>
+
+                    <strong>
+
+                        {{ account.currency }}
+                        {{ account.ledger_balance|floatformat:2 }}
+
+                    </strong>
+
+                </div>
+
+
+                <div>
+
+                    <span>Opened</span>
+
+                    <strong>
+
+                        {% if account.opened_at %}
+
+                            {{ account.opened_at|date:"d M Y" }}
+
+                        {% else %}
+
+                            Not on file
+
+                        {% endif %}
+
+                    </strong>
+
+                </div>
+
+            </div>
+
         </article>
-      </div>
-    {% empty %}
-      <div class="col-12"><div class="panel account-empty">No accounts are linked to your profile yet.</div></div>
-    {% endfor %}
-  </div>
-</section>
 
-<section class="activity-chart-section" aria-labelledby="activity-chart-title">
-  <div class="section-heading">
-    <div>
-      <h2 class="section-title" id="activity-chart-title">Payment activity</h2>
-      <p class="section-caption">Successful simulated payments by month</p>
-    </div>
-  </div>
-  <div class="panel chart-panel">
-    <div class="activity-chart" role="img" aria-label="Successful payment totals for the last six months">
-      {% for month in monthly_activity %}
-      <div class="chart-column">
-        <span class="chart-amount">{{ month.spend|floatformat:0 }}</span>
-        <div class="chart-track"><span class="chart-bar" style="height: {% if month.height %}{{ month.height }}{% else %}2{% endif %}%"></span></div>
-        <span class="chart-month">{{ month.label }}</span>
-      </div>
-      {% endfor %}
-    </div>
-    <p class="chart-footnote">Values reflect successful payments recorded in your account. Imported MyBank demo activity is shown in transaction history and is not used to recalculate balances or this chart.</p>
-  </div>
-</section>
 
-<section class="quick-actions" aria-label="Quick actions">
-  <a class="quick-action" href="{% url 'payments:new' %}"><span>↗</span><strong>Transfer money</strong><small>Start a simulated payment</small></a>
-  <a class="quick-action" href="{% url 'transaction-history' %}"><span>≡</span><strong>View transactions</strong><small>Review account activity</small></a>
-  <a class="quick-action" href="{% url 'payments:statement-csv' %}"><span>↓</span><strong>Download statement</strong><small>Export your transaction history</small></a>
-</section>
-
-<section aria-labelledby="payments-heading">
-  <div class="section-heading">
-    <div>
-      <h2 class="section-title" id="payments-heading">Recent transactions</h2>
-      <p class="section-caption">Live account activity · refreshes every {{ transaction_poll_interval_ms }} ms</p>
-    </div>
-    <a class="payment-view" href="{% url 'transaction-history' %}">View all activity <span aria-hidden="true">→</span></a>
-  </div>
-  <div id="transaction-monitor"
-       data-url="{% url 'recent-transactions-api' %}"
-       data-poll-interval="{{ transaction_poll_interval_ms }}">
-    <p id="transaction-monitor-state" class="section-caption" role="status" aria-live="polite">Loading latest transaction updates…</p>
-    <div class="panel table-panel">
-    <div class="table-responsive">
-      <table class="table mb-0 align-middle">
-        <thead><tr><th scope="col">Recipient / route</th><th scope="col">Transaction reference</th><th scope="col">Date</th><th scope="col" class="text-end">Amount</th><th scope="col">Status</th><th scope="col">Processing</th><th scope="col">Fraud outcome</th><th scope="col"><span class="visually-hidden">Details</span></th></tr></thead>
-        <tbody id="recent-transactions-body">
-        {% for t in recent_transactions %}
-          <tr>
-            <td><div class="merchant-name">{{ t.beneficiary.name|default:t.description }}</div><div class="merchant-sub">{{ t.get_transaction_type_display }}{% if t.channel == 'LEGACY_IMPORT' %} · Imported demo data{% else %} · Simulator{% endif %}</div></td>
-            <td class="transaction-reference">{{ t.transaction_reference|truncatechars:16 }}</td>
-            <td>{{ t.created_at|date:"d M Y · H:i" }}</td>
-            <td class="text-end amount-cell">{{ t.amount }} {{ t.currency }}</td>
-            <td><span class="status-pill {% if t.transaction_status == 'SUCCEEDED' %}status-succeeded{% elif t.transaction_status == 'FAILED' or t.transaction_status == 'REJECTED' %}status-failed{% elif t.transaction_status == 'HELD_FOR_REVIEW' or t.transaction_status == 'PENDING' %}status-held{% elif t.transaction_status == 'UNKNOWN' %}status-unknown{% endif %}">{{ t.get_transaction_status_display }}</span></td>
-            <td>{% if t.processing_time_ms != None %}{{ t.processing_time_ms }} ms{% elif not t.processed_at %}Processing{% else %}—{% endif %}</td>
-            <td>{% if t.payment and t.payment.fraud_decision %}{{ t.payment.fraud_decision }} · {{ t.payment.fraud_score }}/100{% else %}Not recorded{% endif %}</td>
-            <td class="text-end">{% if t.payment_id %}<a class="payment-view" href="{% url 'payments:detail' public_ref=t.payment.public_ref %}">View <span aria-hidden="true">→</span></a>{% else %}<span class="merchant-sub">Activity</span>{% endif %}</td>
-          </tr>
         {% empty %}
-          <tr><td class="empty-state" colspan="8">No transactions yet. Your activity will appear here after you make a simulated payment.</td></tr>
+
+        <div class="panel account-empty">
+
+            No accounts are linked to your profile yet.
+
+        </div>
+
         {% endfor %}
-        </tbody>
-      </table>
+
     </div>
-    </div>
-  </div>
+
 </section>
+
+
+<!-- ========================================= -->
+<!-- PAYMENT ACTIVITY -->
+<!-- ========================================= -->
+
+<section class="dashboard-section activity-dashboard-section"
+         aria-labelledby="activity-chart-title">
+
+    <div class="section-heading dashboard-section-heading">
+
+        <div>
+
+            <p class="section-kicker">
+
+                ANALYTICS
+
+            </p>
+
+            <h2 class="section-title"
+                id="activity-chart-title">
+
+                Payment activity
+
+            </h2>
+
+            <p class="section-caption">
+
+                Successful simulated payments over the last six months.
+
+            </p>
+
+        </div>
+
+
+        <div class="activity-summary">
+
+            <span>Total this month</span>
+
+            <strong>
+
+                ₹{{ monthly_spend|floatformat:0 }}
+
+            </strong>
+
+        </div>
+
+    </div>
+
+
+    <div class="panel chart-panel-modern">
+
+        <div class="chart-header-line">
+
+            <div>
+
+                <strong>Monthly spending overview</strong>
+
+                <span>Successful payments only</span>
+
+            </div>
+
+            <div class="chart-legend">
+
+                <span class="chart-legend-dot"></span>
+
+                Payment volume
+
+            </div>
+
+        </div>
+
+
+        <div class="activity-chart-modern"
+             role="img"
+             aria-label="Successful payment totals for the last six months">
+
+            {% for month in monthly_activity %}
+
+            <div class="chart-column-modern">
+
+                <span class="chart-amount">
+
+                    ₹{{ month.spend|floatformat:0 }}
+
+                </span>
+
+
+                <div class="chart-track-modern">
+
+                    <span class="chart-bar-modern"
+                          style="height:{% if month.height %}{{ month.height }}{% else %}2{% endif %}%">
+
+                    </span>
+
+                </div>
+
+
+                <span class="chart-month">
+
+                    {{ month.label }}
+
+                </span>
+
+            </div>
+
+            {% endfor %}
+
+        </div>
+
+
+        <div class="chart-footnote-modern">
+
+            <span class="chart-info-icon">i</span>
+
+            <span>
+
+                Values reflect successful SentinelPay payments. Imported MYBANK history remains available in transaction history and does not recalculate your account balance.
+
+            </span>
+
+        </div>
+
+    </div>
+
+</section>
+
+
+<!-- ========================================= -->
+<!-- QUICK ACTIONS -->
+<!-- ========================================= -->
+
+<section class="quick-actions quick-actions-modern"
+         aria-label="Quick actions">
+
+    <a class="quick-action"
+       href="{% url 'payments:new' %}">
+
+        <span class="quick-action-icon">
+
+            ↗
+
+        </span>
+
+        <div>
+
+            <strong>
+
+                Transfer money
+
+            </strong>
+
+            <small>
+
+                Start a simulated payment
+
+            </small>
+
+        </div>
+
+        <span class="quick-action-arrow">→</span>
+
+    </a>
+
+
+    <a class="quick-action"
+       href="{% url 'transaction-history' %}">
+
+        <span class="quick-action-icon">
+
+            ≡
+
+        </span>
+
+        <div>
+
+            <strong>
+
+                View transactions
+
+            </strong>
+
+            <small>
+
+                Review account activity
+
+            </small>
+
+        </div>
+
+        <span class="quick-action-arrow">→</span>
+
+    </a>
+
+
+    <a class="quick-action"
+       href="{% url 'payments:statement-csv' %}">
+
+        <span class="quick-action-icon">
+
+            ↓
+
+        </span>
+
+        <div>
+
+            <strong>
+
+                Download statement
+
+            </strong>
+
+            <small>
+
+                Export transaction history
+
+            </small>
+
+        </div>
+
+        <span class="quick-action-arrow">→</span>
+
+    </a>
+
+</section>
+
+
+<!-- ========================================= -->
+<!-- RECENT TRANSACTIONS -->
+<!-- ========================================= -->
+
+<section class="dashboard-section transactions-dashboard-section"
+         aria-labelledby="payments-heading">
+
+    <div class="section-heading dashboard-section-heading">
+
+        <div>
+
+            <p class="section-kicker">
+
+                ACTIVITY
+
+            </p>
+
+            <h2 class="section-title"
+                id="payments-heading">
+
+                Recent transactions
+
+            </h2>
+
+            <p class="section-caption live-activity-text">
+
+                <span class="live-dot"></span>
+
+                Live account activity · refreshes every
+                {{ transaction_poll_interval_ms }} ms
+
+            </p>
+
+        </div>
+
+
+        <a class="payment-view transaction-view-all"
+           href="{% url 'transaction-history' %}">
+
+            View all activity
+
+            <span aria-hidden="true">→</span>
+
+        </a>
+
+    </div>
+
+
+    <div id="transaction-monitor"
+
+         class="transaction-monitor-modern"
+
+         data-url="{% url 'recent-transactions-api' %}"
+
+         data-poll-interval="{{ transaction_poll_interval_ms }}">
+
+
+        <div class="transaction-live-status">
+
+            <span class="live-status-indicator"></span>
+
+            <p id="transaction-monitor-state"
+               class="section-caption"
+               role="status"
+               aria-live="polite">
+
+                Loading latest transaction updates…
+
+            </p>
+
+        </div>
+
+
+        <div class="panel table-panel transaction-table-card">
+
+            <div class="table-responsive">
+
+                <table class="table mb-0 align-middle transaction-table-modern">
+
+                    <thead>
+
+                        <tr>
+
+                            <th scope="col">
+                                Transaction
+                            </th>
+
+                            <th scope="col">
+                                Reference
+                            </th>
+
+                            <th scope="col">
+                                Date & time
+                            </th>
+
+                            <th scope="col"
+                                class="text-end">
+
+                                Amount
+
+                            </th>
+
+                            <th scope="col">
+
+                                Status
+
+                            </th>
+
+                            <th scope="col">
+
+                                Processing
+
+                            </th>
+
+                            <th scope="col">
+
+                                Fraud check
+
+                            </th>
+
+                            <th scope="col">
+
+                                <span class="visually-hidden">
+
+                                    Details
+
+                                </span>
+
+                            </th>
+
+                        </tr>
+
+                    </thead>
+
+
+                    <tbody id="recent-transactions-body">
+
+                        {% for t in recent_transactions %}
+
+                        <tr>
+
+                            <td>
+
+                                <div class="transaction-person">
+
+                                    <div class="transaction-icon">
+
+                                        ↗
+
+                                    </div>
+
+                                    <div>
+
+                                        <div class="merchant-name">
+
+                                            {{ t.beneficiary.name|default:t.description }}
+
+                                        </div>
+
+                                        <div class="merchant-sub">
+
+                                            {{ t.get_transaction_type_display }}
+
+                                            {% if t.channel == 'LEGACY_IMPORT' %}
+
+                                                · Imported MYBANK data
+
+                                            {% else %}
+
+                                                · SentinelPay
+
+                                            {% endif %}
+
+                                        </div>
+
+                                    </div>
+
+                                </div>
+
+                            </td>
+
+
+                            <td class="transaction-reference">
+
+                                {{ t.transaction_reference|truncatechars:16 }}
+
+                            </td>
+
+
+                            <td>
+
+                                {{ t.created_at|date:"d M Y" }}
+
+                                <span class="transaction-time">
+
+                                    {{ t.created_at|date:"H:i" }}
+
+                                </span>
+
+                            </td>
+
+
+                            <td class="text-end amount-cell">
+
+                                <strong>
+
+                                    ₹{{ t.amount|floatformat:2 }}
+
+                                </strong>
+
+                                <span class="amount-currency">
+
+                                    {{ t.currency }}
+
+                                </span>
+
+                            </td>
+
+
+                            <td>
+
+                                <span class="status-pill
+
+                                {% if t.transaction_status == 'SUCCEEDED' %}
+
+                                    status-succeeded
+
+                                {% elif t.transaction_status == 'FAILED' or t.transaction_status == 'REJECTED' %}
+
+                                    status-failed
+
+                                {% elif t.transaction_status == 'HELD_FOR_REVIEW' or t.transaction_status == 'PENDING' %}
+
+                                    status-held
+
+                                {% elif t.transaction_status == 'UNKNOWN' %}
+
+                                    status-unknown
+
+                                {% endif %}">
+
+                                    {{ t.get_transaction_status_display }}
+
+                                </span>
+
+                            </td>
+
+
+                            <td>
+
+                                {% if t.processing_time_ms != None %}
+
+                                    <span class="processing-time">
+
+                                        {{ t.processing_time_ms }} ms
+
+                                    </span>
+
+                                {% elif not t.processed_at %}
+
+                                    <span class="processing-time processing-pending">
+
+                                        Processing
+
+                                    </span>
+
+                                {% else %}
+
+                                    —
+
+                                {% endif %}
+
+                            </td>
+
+
+                            <td>
+
+                                {% if t.payment and t.payment.fraud_decision %}
+
+                                    <div class="fraud-result">
+
+                                        <strong>
+
+                                            {{ t.payment.fraud_decision }}
+
+                                        </strong>
+
+                                        <small>
+
+                                            {{ t.payment.fraud_score }}/100
+
+                                        </small>
+
+                                    </div>
+
+                                {% else %}
+
+                                    <span class="merchant-sub">
+
+                                        Not recorded
+
+                                    </span>
+
+                                {% endif %}
+
+                            </td>
+
+
+                            <td class="text-end">
+
+                                {% if t.payment_id %}
+
+                                <a class="payment-view"
+                                   href="{% url 'payments:detail' public_ref=t.payment.public_ref %}">
+
+                                    View
+
+                                    <span aria-hidden="true">
+
+                                        →
+
+                                    </span>
+
+                                </a>
+
+                                {% else %}
+
+                                <span class="merchant-sub">
+
+                                    Activity
+
+                                </span>
+
+                                {% endif %}
+
+                            </td>
+
+                        </tr>
+
+
+                        {% empty %}
+
+                        <tr>
+
+                            <td class="empty-state"
+                                colspan="8">
+
+                                No transactions yet. Your activity will appear here after you make a simulated payment.
+
+                            </td>
+
+                        </tr>
+
+                        {% endfor %}
+
+                    </tbody>
+
+                </table>
+
+            </div>
+
+        </div>
+
+    </div>
+
+</section>
+
+
+<!-- ========================================= -->
+<!-- LIVE TRANSACTION REFRESH -->
+<!-- ========================================= -->
+
 <script>
-  (() => {
+
+(() => {
+
     const monitor = document.getElementById("transaction-monitor");
+
     const state = document.getElementById("transaction-monitor-state");
+
     const body = document.getElementById("recent-transactions-body");
+
     const pollInterval = Number(monitor.dataset.pollInterval);
+
     let refreshing = false;
 
+
     const cell = (row, text, className = "") => {
-      const element = document.createElement("td");
-      element.textContent = text;
-      if (className) element.className = className;
-      row.appendChild(element);
-      return element;
+
+        const element = document.createElement("td");
+
+        element.textContent = text;
+
+        if (className) {
+
+            element.className = className;
+
+        }
+
+        row.appendChild(element);
+
+        return element;
+
     };
+
 
     const formatTime = (value) => new Intl.DateTimeFormat("en-IN", {
-      dateStyle: "medium",
-      timeStyle: "short",
-      timeZone: "Asia/Kolkata"
+
+        dateStyle: "medium",
+
+        timeStyle: "short",
+
+        timeZone: "Asia/Kolkata"
+
     }).format(new Date(value));
 
+
     const renderTransactions = (transactions) => {
-      body.replaceChildren();
-      if (!transactions.length) {
-        const row = document.createElement("tr");
-        const empty = cell(row, "No transactions yet. Your activity will appear here after you make a simulated payment.");
-        empty.colSpan = 8;
-        empty.className = "empty-state";
-        body.appendChild(row);
-        return;
-      }
 
-      transactions.forEach((item) => {
-        const row = document.createElement("tr");
-        const activity = document.createElement("td");
-        const name = document.createElement("div");
-        name.className = "merchant-name";
-        name.textContent = item.description || item.transaction_type;
-        const source = document.createElement("div");
-        source.className = "merchant-sub";
-        source.textContent = `${item.transaction_type} · ${item.channel === "LEGACY_IMPORT" ? "Imported demo data" : "Simulator"}`;
-        activity.append(name, source);
-        row.appendChild(activity);
-        cell(row, item.reference.slice(0, 13) + "…", "transaction-reference");
-        cell(row, formatTime(item.created_at));
-        cell(row, `${item.amount} ${item.currency}`, "text-end amount-cell");
+        body.replaceChildren();
 
-        const statusCell = document.createElement("td");
-        const status = document.createElement("span");
-        status.className = "status-pill";
-        if (item.status === "SUCCEEDED") status.classList.add("status-succeeded");
-        else if (["FAILED", "REJECTED"].includes(item.status)) status.classList.add("status-failed");
-        else if (["HELD_FOR_REVIEW", "PENDING"].includes(item.status)) status.classList.add("status-held");
-        else if (item.status === "UNKNOWN") status.classList.add("status-unknown");
-        status.textContent = item.status_display;
-        statusCell.appendChild(status);
-        row.appendChild(statusCell);
 
-        cell(row, item.processing_time_ms !== null
-          ? `${item.processing_time_ms} ms`
-          : item.processed_at ? "—" : "Processing");
-        cell(row, item.fraud_decision
-          ? `${item.fraud_decision} · ${item.fraud_score}/100`
-          : "Not recorded");
-        const details = document.createElement("td");
-        details.className = "text-end";
-        if (item.detail_url) {
-          const link = document.createElement("a");
-          link.className = "payment-view";
-          link.href = item.detail_url;
-          link.textContent = "View →";
-          details.appendChild(link);
-        } else {
-          details.textContent = "Activity";
-          details.className += " merchant-sub";
+        if (!transactions.length) {
+
+            const row = document.createElement("tr");
+
+            const empty = cell(
+
+                row,
+
+                "No transactions yet. Your activity will appear here after you make a simulated payment."
+
+            );
+
+            empty.colSpan = 8;
+
+            empty.className = "empty-state";
+
+            body.appendChild(row);
+
+            return;
+
         }
-        row.appendChild(details);
-        body.appendChild(row);
-      });
+
+
+        transactions.forEach((item) => {
+
+            const row = document.createElement("tr");
+
+
+            const activity = document.createElement("td");
+
+            const wrapper = document.createElement("div");
+
+            wrapper.className = "transaction-person";
+
+
+            const icon = document.createElement("div");
+
+            icon.className = "transaction-icon";
+
+            icon.textContent = "↗";
+
+
+            const detailsWrapper = document.createElement("div");
+
+
+            const name = document.createElement("div");
+
+            name.className = "merchant-name";
+
+            name.textContent = item.description || item.transaction_type;
+
+
+            const source = document.createElement("div");
+
+            source.className = "merchant-sub";
+
+            source.textContent =
+                `${item.transaction_type} · ${
+                    item.channel === "LEGACY_IMPORT"
+                        ? "Imported MYBANK data"
+                        : "SentinelPay"
+                }`;
+
+
+            detailsWrapper.append(name, source);
+
+            wrapper.append(icon, detailsWrapper);
+
+            activity.appendChild(wrapper);
+
+            row.appendChild(activity);
+
+
+            cell(
+
+                row,
+
+                item.reference.slice(0, 13) + "…",
+
+                "transaction-reference"
+
+            );
+
+
+            cell(row, formatTime(item.created_at));
+
+
+            cell(
+
+                row,
+
+                `₹${item.amount} ${item.currency}`,
+
+                "text-end amount-cell"
+
+            );
+
+
+            const statusCell = document.createElement("td");
+
+            const status = document.createElement("span");
+
+            status.className = "status-pill";
+
+
+            if (item.status === "SUCCEEDED") {
+
+                status.classList.add("status-succeeded");
+
+            }
+
+            else if (["FAILED", "REJECTED"].includes(item.status)) {
+
+                status.classList.add("status-failed");
+
+            }
+
+            else if (
+                ["HELD_FOR_REVIEW", "PENDING"].includes(item.status)
+            ) {
+
+                status.classList.add("status-held");
+
+            }
+
+            else if (item.status === "UNKNOWN") {
+
+                status.classList.add("status-unknown");
+
+            }
+
+
+            status.textContent = item.status_display;
+
+            statusCell.appendChild(status);
+
+            row.appendChild(statusCell);
+
+
+            cell(
+
+                row,
+
+                item.processing_time_ms !== null
+
+                    ? `${item.processing_time_ms} ms`
+
+                    : item.processed_at
+
+                        ? "—"
+
+                        : "Processing"
+
+            );
+
+
+            cell(
+
+                row,
+
+                item.fraud_decision
+
+                    ? `${item.fraud_decision} · ${item.fraud_score}/100`
+
+                    : "Not recorded"
+
+            );
+
+
+            const details = document.createElement("td");
+
+            details.className = "text-end";
+
+
+            if (item.detail_url) {
+
+                const link = document.createElement("a");
+
+                link.className = "payment-view";
+
+                link.href = item.detail_url;
+
+                link.textContent = "View →";
+
+                details.appendChild(link);
+
+            }
+
+            else {
+
+                details.textContent = "Activity";
+
+                details.className += " merchant-sub";
+
+            }
+
+
+            row.appendChild(details);
+
+            body.appendChild(row);
+
+        });
+
     };
+
 
     const refresh = async () => {
-      if (refreshing) return;
-      refreshing = true;
-      state.textContent = "Refreshing transactions…";
-      try {
-        const response = await fetch(monitor.dataset.url, {
-          headers: { "Accept": "application/json" },
-          credentials: "same-origin",
-          cache: "no-store"
-        });
-        if (!response.ok) throw new Error(`Request failed (${response.status})`);
-        const payload = await response.json();
-        if (!Array.isArray(payload.results)) throw new Error("Unexpected response format");
-        renderTransactions(payload.results);
-        state.textContent = `Live updates · refreshed ${formatTime(new Date().toISOString())}`;
-      } catch (error) {
-        state.textContent = "Unable to refresh transactions. Showing last available results; retrying.";
-      } finally {
-        refreshing = false;
-      }
+
+        if (refreshing) return;
+
+        refreshing = true;
+
+        state.textContent = "Refreshing transactions…";
+
+
+        try {
+
+            const response = await fetch(
+
+                monitor.dataset.url,
+
+                {
+
+                    headers: {
+
+                        "Accept": "application/json"
+
+                    },
+
+                    credentials: "same-origin",
+
+                    cache: "no-store"
+
+                }
+
+            );
+
+
+            if (!response.ok) {
+
+                throw new Error(
+                    `Request failed (${response.status})`
+                );
+
+            }
+
+
+            const payload = await response.json();
+
+
+            if (!Array.isArray(payload.results)) {
+
+                throw new Error(
+                    "Unexpected response format"
+                );
+
+            }
+
+
+            renderTransactions(payload.results);
+
+
+            state.textContent =
+                `Live updates · refreshed ${formatTime(
+                    new Date().toISOString()
+                )}`;
+
+
+        }
+
+        catch (error) {
+
+            state.textContent =
+                "Unable to refresh transactions. Showing last available results; retrying.";
+
+        }
+
+        finally {
+
+            refreshing = false;
+
+        }
+
     };
 
+
     refresh();
+
     window.setInterval(refresh, pollInterval);
-  })();
+
+})();
+
 </script>
+
 {% endblock %}
