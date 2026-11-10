@@ -23,6 +23,7 @@ SentinelPay is a synthetic digital-banking and payment-fraud demonstration built
 - [Project flow](./docs/01-project-flow.md) — user journey from login through payment processing and logout.
 - [Project structure](./docs/02-project-structure.md) — source tree, app responsibilities, and code organization rationale.
 - [Software Requirements Specification](./docs/03-software-requirements-specification.md) — current functional/non-functional requirements and limitations.
+- [Project walkthrough and demo guide](./docs/04-project-presentation-and-demo-guide.md) — architecture and lifecycle diagrams, presentation setup, timed demo script, and likely questions.
 
 ## Page inventory
 
