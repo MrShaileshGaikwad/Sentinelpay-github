@@ -1,0 +1,283 @@
+{% load static %}
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+
+    <meta name="theme-color" content="#0f172a">
+
+    <title>{% block title %}SentinelPay{% endblock %}</title>
+
+    <link rel="stylesheet" href="{% static 'css/site.css' %}?v=22">
+</head>
+
+<body>
+
+    <!-- ============================= -->
+    <!-- TOP NAVIGATION -->
+    <!-- ============================= -->
+
+    <nav class="topbar">
+
+        <div class="container app-container topbar-inner">
+
+            <a class="brand" href="{% url 'dashboard' %}" aria-label="SentinelPay Home">
+
+                <span class="brand-mark">
+                    S
+                </span>
+
+                <span class="brand-text">
+                    sentinel<span class="brand-light">pay</span>
+                </span>
+
+            </a>
+
+
+            {% if user.is_authenticated %}
+
+            <div class="nav-actions">
+
+                <div class="nav-user">
+
+                    <span class="avatar">
+                        {{ account_display_name|default:user.get_username|slice:":1"|upper }}
+                    </span>
+
+                    <span class="nav-username">
+                        {{ account_display_name|default:user.get_username }}
+                    </span>
+
+                </div>
+
+
+                <form method="post" action="{% url 'logout' %}" class="logout-form">
+
+                    {% csrf_token %}
+
+                    <button class="btn-logout" type="submit">
+                        Sign out
+                    </button>
+
+                </form>
+
+            </div>
+
+            {% endif %}
+
+        </div>
+
+    </nav>
+
+
+    <!-- ============================= -->
+    <!-- SIDEBAR -->
+    <!-- ============================= -->
+
+    {% if user.is_authenticated %}
+
+    <aside class="workspace-nav" aria-label="Main navigation">
+
+        <div class="sidebar-content">
+
+            <p class="workspace-nav-label">
+                WORKSPACE
+            </p>
+
+
+            <nav class="workspace-nav-links">
+
+
+                <!-- OVERVIEW -->
+                <a
+                    class="workspace-link {% if request.resolver_match.url_name == 'dashboard' %}is-active{% endif %}"
+                    href="{% url 'dashboard' %}"
+                    {% if request.resolver_match.url_name == 'dashboard' %}aria-current="page"{% endif %}
+                >
+
+                    <span class="workspace-icon" aria-hidden="true">
+                        ⌂
+                    </span>
+
+                    <span>
+                        Overview
+                    </span>
+
+                </a>
+
+
+                <!-- CUSTOMER PROFILE -->
+                <a
+                    class="workspace-link {% if request.resolver_match.url_name == 'customer-profile' %}is-active{% endif %}"
+                    href="{% url 'customer-profile' %}"
+                    {% if request.resolver_match.url_name == 'customer-profile' %}aria-current="page"{% endif %}
+                >
+
+                    <span class="workspace-icon" aria-hidden="true">
+                        ◎
+                    </span>
+
+                    <span>
+                        Customer profile
+                    </span>
+
+                </a>
+
+
+                <!-- PAYMENTS -->
+                <a
+                    class="workspace-link {% if request.resolver_match.url_name == 'new' or request.resolver_match.url_name == 'review' %}is-active{% endif %}"
+                    href="{% url 'payments:new' %}"
+                    {% if request.resolver_match.url_name == 'new' or request.resolver_match.url_name == 'review' %}aria-current="page"{% endif %}
+                >
+
+                    <span class="workspace-icon" aria-hidden="true">
+                        ↗
+                    </span>
+
+                    <span>
+                        Payments
+                    </span>
+
+                </a>
+
+
+                <!-- ACTIVITY -->
+                <a
+                    class="workspace-link {% if request.resolver_match.url_name == 'transaction-history' or request.resolver_match.url_name == 'list' or request.resolver_match.url_name == 'detail' or request.resolver_match.url_name == 'statement-csv' %}is-active{% endif %}"
+                    href="{% url 'transaction-history' %}"
+                    {% if request.resolver_match.url_name == 'transaction-history' or request.resolver_match.url_name == 'list' or request.resolver_match.url_name == 'detail' or request.resolver_match.url_name == 'statement-csv' %}aria-current="page"{% endif %}
+                >
+
+                    <span class="workspace-icon" aria-hidden="true">
+                        ≡
+                    </span>
+
+                    <span>
+                        Activity
+                    </span>
+
+                </a>
+
+
+                <!-- FRAUD INTELLIGENCE -->
+                {% if can_review_fraud %}
+
+                <a
+                    class="workspace-link {% if request.resolver_match.url_name == 'fraud-center' or request.resolver_match.url_name == 'fraud-case' %}is-active{% endif %}"
+                    href="{% url 'payments:fraud-center' %}"
+                    {% if request.resolver_match.url_name == 'fraud-center' or request.resolver_match.url_name == 'fraud-case' %}aria-current="page"{% endif %}
+                >
+
+                    <span class="workspace-icon" aria-hidden="true">
+                        ◇
+                    </span>
+
+                    <span>
+                        Fraud intelligence
+                    </span>
+
+                </a>
+
+                {% endif %}
+
+
+            </nav>
+
+
+            <!-- SECURITY CARD -->
+            <div class="workspace-assurance">
+
+                <span class="assurance-mark" aria-hidden="true">
+                    ✓
+                </span>
+
+                <div>
+
+                    <strong>
+                        Secure workspace
+                    </strong>
+
+                    <small>
+                        Account access is scoped to your profile.
+                    </small>
+
+                </div>
+
+            </div>
+
+        </div>
+
+    </aside>
+
+
+    <!-- ============================= -->
+    <!-- MAIN WORKSPACE -->
+    <!-- ============================= -->
+
+    <div class="workspace-main">
+
+    {% endif %}
+
+
+        <!-- ============================= -->
+        <!-- PAGE CONTENT -->
+        <!-- ============================= -->
+
+        <main class="container app-container page-content">
+
+            {% if messages %}
+
+            <div class="message-stack" aria-live="polite">
+
+                {% for message in messages %}
+
+                <div class="alert message-{{ message.tags }}" role="status">
+                    {{ message }}
+                </div>
+
+                {% endfor %}
+
+            </div>
+
+            {% endif %}
+
+
+            {% block content %}
+            {% endblock %}
+
+        </main>
+
+
+        <!-- ============================= -->
+        <!-- FOOTER -->
+        <!-- ============================= -->
+
+        <footer class="app-footer">
+
+            <div class="container app-container footer-inner">
+
+                <span>
+                    <span class="footer-dot"></span>
+                    SentinelPay is a simulated academic banking platform.
+                </span>
+
+                <span>
+                    Synthetic data only · No real funds move
+                </span>
+
+            </div>
+
+        </footer>
+
+
+    {% if user.is_authenticated %}
+    </div>
+    {% endif %}
+
+
+</body>
+
+</html>
