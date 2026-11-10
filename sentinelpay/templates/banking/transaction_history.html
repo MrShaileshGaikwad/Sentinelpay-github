@@ -1,0 +1,74 @@
+{% extends "banking/base.html" %}
+{% block title %}Transactions · SentinelPay{% endblock %}
+{% block content %}
+<header class="page-heading">
+  <div>
+    <p class="eyebrow">Customer banking</p>
+    <h1 class="page-title">Transaction history</h1>
+    <p class="page-subtitle">Activity for accounts owned by your signed-in profile. Simulated and imported demonstration records are labelled.</p>
+  </div>
+  <a class="btn btn-primary" href="{% url 'payments:new' %}">Make a payment <span aria-hidden="true">→</span></a>
+</header>
+
+<section aria-labelledby="transaction-history-heading">
+  <div class="section-heading">
+    <div>
+      <h2 class="section-title" id="transaction-history-heading">All account activity</h2>
+      <p class="section-caption">{{ page_obj.paginator.count }} transactions · newest first</p>
+    </div>
+  </div>
+  <div class="panel table-panel">
+    <div class="table-responsive">
+      <table class="table align-middle">
+        <thead>
+          <tr>
+            <th scope="col">Activity</th>
+            <th scope="col">Reference</th>
+            <th scope="col">Date</th>
+            <th scope="col">Account</th>
+            <th scope="col" class="text-end">Amount</th>
+            <th scope="col">Status</th>
+            <th scope="col"><span class="visually-hidden">Details</span></th>
+          </tr>
+        </thead>
+        <tbody>
+        {% for item in page_obj %}
+          <tr>
+            <td>
+              <div class="merchant-name">{{ item.beneficiary.name|default:item.description }}</div>
+              <div class="merchant-sub">{{ item.get_transaction_type_display }}{% if item.channel == "LEGACY_IMPORT" %} · Imported demonstration record{% else %} · SentinelPay simulator{% endif %}</div>
+            </td>
+            <td class="transaction-reference">{{ item.transaction_reference }}</td>
+            <td>{{ item.created_at|date:"d M Y · H:i" }}</td>
+            <td>{{ item.account.masked_ref }}</td>
+            <td class="text-end amount-cell">{{ item.amount|floatformat:2 }} {{ item.currency }}</td>
+            <td><span class="status-pill {% if item.transaction_status == 'SUCCEEDED' %}status-succeeded{% elif item.transaction_status == 'FAILED' or item.transaction_status == 'REJECTED' %}status-failed{% elif item.transaction_status == 'HELD_FOR_REVIEW' or item.transaction_status == 'PENDING' %}status-held{% elif item.transaction_status == 'UNKNOWN' %}status-unknown{% endif %}">{{ item.get_transaction_status_display }}</span></td>
+            <td class="text-end">{% if item.payment_id %}<a class="payment-view" href="{% url 'payments:detail' public_ref=item.payment.public_ref %}">Receipt <span aria-hidden="true">→</span></a>{% else %}<span class="merchant-sub">Imported history</span>{% endif %}</td>
+          </tr>
+        {% empty %}
+          <tr><td class="empty-state" colspan="7">No transactions are linked to your accounts yet.</td></tr>
+        {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    {% if page_obj.paginator.num_pages > 1 %}
+      <nav class="pagination-wrap" aria-label="Transaction history pages">
+        <span>Page {{ page_obj.number }} of {{ page_obj.paginator.num_pages }}</span>
+        <div class="pagination-actions">
+          {% if page_obj.has_previous %}
+            <a class="btn-outline-soft" href="?page={{ page_obj.previous_page_number }}">Previous</a>
+          {% else %}
+            <span class="btn-outline-soft is-disabled" aria-disabled="true">Previous</span>
+          {% endif %}
+          {% if page_obj.has_next %}
+            <a class="btn-outline-soft" href="?page={{ page_obj.next_page_number }}">Next</a>
+          {% else %}
+            <span class="btn-outline-soft is-disabled" aria-disabled="true">Next</span>
+          {% endif %}
+        </div>
+      </nav>
+    {% endif %}
+  </div>
+  <p class="chart-footnote">Historical rows imported from MyBank are preserved as demo activity and do not update or reconcile account balances.</p>
+</section>
+{% endblock %}
